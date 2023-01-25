@@ -1,0 +1,37 @@
+[project]
+name = "pyodss"
+description = "Python package for ODSS dataset"
+authors = [
+    { name = "Jonathan de Bruin", email = "asreview@uu.nl" }
+]
+readme = "README.md"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10"
+]
+license = {text = "MIT"}
+dependencies = ["pyalex"]
+dynamic = ["version"]
+requires-python = ">=3.6"
+
+[project.optional-dependencies]
+lint = ["flake8", "flake8-import-order"]
+test = ["pytest"]
+
+[project.scripts]
+pyodss = "pyodss.__main__:main"
+
+[build-system]
+build-backend = 'setuptools.build_meta'
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
+
+[tool.setuptools]
+packages = ["pyodss"]
+
+[tool.setuptools_scm]
+write_to = "pyodss/_version.py"
