@@ -9,6 +9,33 @@ from zipfile import ZipFile
 import pandas as pd
 from pyalex import Work
 
+WORK_MAPPING = {"title": lambda x: x["title"], "abstract": lambda x: x["abstract"]}
+
+
+def iter_metadata(
+    metadata_fp=Path("..", "odss-release", f"metadata.json"),
+    works_fp=Path("..", "odss-release", f"metadata_works.json")
+):
+
+    with open(works_fp, "r") as f:
+        works = json.load(f)
+
+    with open(metadata_fp, "r") as f:
+        metadata = json.load(f)
+
+    for dataset in metadata["datasets"]:
+
+        if "openalex_id" not in dataset["publication"]:
+            print("Failed to load dataset", dataset["key"])
+            continue
+
+        for w in works:
+
+            # print(dataset["publication"]["openalex_id"], w["id"])
+            if dataset["publication"]["openalex_id"] == w["id"]:
+                yield dataset, w
+                break
+
 
 class Dataset(object):
     """docstring for Dataset"""
@@ -17,11 +44,23 @@ class Dataset(object):
         super(Dataset, self).__init__()
         self.name = name
 
-        self.works = None
+    @property
+    def metadata(self):
 
-        self.fp_ids = pd.read_csv(
-            Path("..", "odss-release", name, f"{name}.csv"), index_col=["openalex_id"]
-        )
+        if not hasattr(self, "_metadata"):
+            with open(Path("..", "odss-release", self.name, "metadata.json"), "r") as f:
+                self._metadata = json.load(f)
+
+        return self._metadata
+
+    @property
+    def metadata_work(self):
+
+        if not hasattr(self, "_metadata"):
+            with open(Path("..", "odss-release", self.name, "metadata_works.json"), "r") as f:
+                self._metadata_work = json.load(f)
+
+        return self._metadata_work
 
     def iter_works(self):
 
@@ -34,14 +73,14 @@ class Dataset(object):
                     for di in d:
                         yield Work(di)
 
-    def to_dict(self, variable={"title": "title", "abstract": "abstract"}):
+    def to_dict(self, variable=WORK_MAPPING):
 
         records = {}
         for work in self.iter_works():
 
             record = {}
             for key, value in variable.items():
-                record[key] = work[key]
+                record[key] = value(work)
 
             records[work["id"]] = record
 

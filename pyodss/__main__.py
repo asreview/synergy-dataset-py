@@ -1,8 +1,14 @@
 import argparse
 
-from pyodss._version import __version__
-from pyodss.base import Dataset
+from pathlib import Path
 
+from pyodss._version import __version__
+from pyodss.base import Dataset, iter_metadata
+import json
+import sys
+from glob import glob
+
+from tabulate import tabulate
 
 def main():
 
@@ -19,6 +25,11 @@ def main():
         "-o",
         "--output",
         help="Dataset output path.",
+    )
+    parser.add_argument(
+        "-a",
+        "--all",
+        help="Download all datasets",
     )
     parser.add_argument(
         "-l",
@@ -42,6 +53,21 @@ def main():
         if user_input.lower() not in ["y", "yes"]:
             return
 
+    # with open(Path("..", "odss-release", f"metadata.json"), "r") as f:
+    #     metadata = json.load(f)
+
+    # with open(Path("..", "odss-release", f"metadata_works.json"), "r") as f:
+    #     metadata_works = json.load(f)
+
+    # for x in metadata["datasets"]:
+
+    #     if args.dataset == x["key"]:
+    #         print(x)
+    #         break
+    # else:
+    #     raise ValueError("Dataset not found.")
+
+
     d = Dataset(args.dataset)
     result = d.to_frame()
     print(result)
@@ -50,6 +76,60 @@ def main():
         result.to_csv(args.output)
 
 
+def list_datasets(argv):
+
+    parser = argparse.ArgumentParser(
+        prog="pyodss",
+        description="List datasets.",
+    )
+
+    args = parser.parse_args(argv)
+
+    table_values = []
+
+    for dataset in sorted(glob(str(Path("..", "odss-release", "*")))):
+
+        d = Dataset(dataset.split("/")[-1])
+
+        if "concepts" not in d.metadata_work:
+            print(d.metadata["publication"]["openalex_id"], "No concepts found")
+            continue
+
+        concepts = list(filter(lambda x: x["level"] == 0, d.metadata_work["concepts"]))
+        concepts_str = ", ".join([x["display_name"] for x in concepts])
+        table_values.append(["{}".format(d.metadata["key"]), concepts_str])
+
+    print("\n", tabulate(table_values, headers=["Dataset", "Field"]), "\n")
+
+
+def show_dataset(argv):
+
+    parser = argparse.ArgumentParser(
+        prog="pyodss",
+        description="Show dataset.",
+    )
+    parser.add_argument(
+        "dataset",
+        help="Dataset name.",
+    )
+    args = parser.parse_args(argv)
+
+    d = Dataset(args.dataset)
+
+    print(d.metadata_work["display_name"])
+    print(d.metadata_work["publication_year"])
+
+    concepts = list(filter(lambda x: x["level"] == 0, d.metadata_work["concepts"]))
+    concepts_str = ", ".join([x["display_name"] for x in concepts])
+
+    print("Fields:", concepts_str)
+
+
 if __name__ == "__main__":
 
-    main()
+    if sys.argv[1] == "list":
+        list_datasets(sys.argv[2:])
+    elif sys.argv[1] == "show":
+        show_dataset(sys.argv[2:])
+    else:
+        main()

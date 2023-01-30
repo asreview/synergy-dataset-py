@@ -16,6 +16,18 @@ pip install pyodss
 
 ## Getting started
 
+Download entire dataset
+
+```sh
+pyodss -a
+```
+
+Download single dataset
+
+```sh
+pyodss -d Appenzeller-Herzog_2020
+```
+
 ## License
 
 [MIT](/LICENSE)
