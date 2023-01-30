@@ -53,21 +53,6 @@ def main():
         if user_input.lower() not in ["y", "yes"]:
             return
 
-    # with open(Path("..", "odss-release", f"metadata.json"), "r") as f:
-    #     metadata = json.load(f)
-
-    # with open(Path("..", "odss-release", f"metadata_works.json"), "r") as f:
-    #     metadata_works = json.load(f)
-
-    # for x in metadata["datasets"]:
-
-    #     if args.dataset == x["key"]:
-    #         print(x)
-    #         break
-    # else:
-    #     raise ValueError("Dataset not found.")
-
-
     d = Dataset(args.dataset)
     result = d.to_frame()
     print(result)
@@ -82,7 +67,11 @@ def list_datasets(argv):
         prog="pyodss",
         description="List datasets.",
     )
-
+    parser.add_argument(
+        "--tablefmt",
+        default="simple",
+        help="Table format.",
+    )
     args = parser.parse_args(argv)
 
     table_values = []
@@ -97,9 +86,11 @@ def list_datasets(argv):
 
         concepts = list(filter(lambda x: x["level"] == 0, d.metadata_work["concepts"]))
         concepts_str = ", ".join([x["display_name"] for x in concepts])
-        table_values.append(["{}".format(d.metadata["key"]), concepts_str])
+        table_values.append(["{}".format(d.metadata["key"]), concepts_str, d.metadata["data"]["n_records"], d.metadata["data"]["n_records_included"]])
 
-    print("\n", tabulate(table_values, headers=["Dataset", "Field"]), "\n")
+    print("\n", tabulate(table_values,
+                         headers=["Dataset", "Field", "Count", "Included"],
+                         tablefmt=args.tablefmt), "\n")
 
 
 def show_dataset(argv):
