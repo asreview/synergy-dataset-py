@@ -7,30 +7,43 @@ from pathlib import Path
 from zipfile import ZipFile
 from io import BytesIO
 from urllib.request import urlopen
+from jsonpath_ng import jsonpath, parse
 
 import pandas as pd
 from pyalex import Work
 
-WORK_MAPPING = {"id": lambda x: x["id"], "title": lambda x: x["title"], "abstract": lambda x: x["abstract"]}
+WORK_MAPPING = {"id": lambda x: x["id"], "doi": lambda x: x["doi"], "title": lambda x: x["title"], "abstract": lambda x: x["abstract"]}
 
-ODSS_PATH = Path("tmp","odss","systematic-review-datasets-release-v0.1")
+RELEASE_VERSION = "v0.1"
+RELEASE_URL = f"https://github.com/asreview/systematic-review-datasets/archive/refs/tags/release/{RELEASE_VERSION}.zip"
+ODSS_PATH = Path("tmp","odss",f"systematic-review-datasets-release-{RELEASE_VERSION}")
+
+
+def _dataset_available():
+
+    return ODSS_PATH.exists()
+
+def _raw_download_dataset(url=RELEASE_URL, path=ODSS_PATH):
+
+    print("Downloading version {RELEASE_VERSION} of ODSS.")
+
+    release_zip = ZipFile(BytesIO(urlopen(url).read()))
+    release_zip.extractall(path=path)
+
+
 
 def iter_datasets(fp=ODSS_PATH):
+
+    if not _dataset_available():
+        _raw_download_dataset()
 
     for dataset in sorted(glob.glob(str(Path(fp, "*", "metadata.json")))):
 
         yield Dataset(dataset.split("/")[-2])
 
 
-def _raw_download_dataset(url="https://github.com/asreview/systematic-review-datasets/archive/refs/tags/release/v0.1.zip", path=ODSS_PATH):
-
-    if not ODSS_PATH.exists():
-        release_zip = ZipFile(BytesIO(urlopen(url).read()))
-        release_zip.extractall(path=path)
-
-
 class Dataset(object):
-    """docstring for Dataset"""
+    """ODSS Dataset"""
 
     def __init__(self, name):
         super(Dataset, self).__init__()

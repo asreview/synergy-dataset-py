@@ -11,6 +11,26 @@ from glob import glob
 
 from tabulate import tabulate
 
+
+def main():
+
+    parser = argparse.ArgumentParser(
+        prog="pyodss",
+        description="Python package for ODSS dataset. Use the commands download, show or list.",
+    )
+    # version
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version="%(prog)s {version}".format(version=__version__),
+    )
+
+    args, _ = parser.parse_known_args()
+
+    parser.print_usage()
+
+
 def download_dataset(argv):
 
     parser = argparse.ArgumentParser(
@@ -27,7 +47,7 @@ def download_dataset(argv):
     parser.add_argument(
         "-o",
         "--output",
-        default="pyodss_dataset/",
+        default="pyodss_dataset",
         help="Dataset output path.",
     )
     parser.add_argument(
@@ -37,13 +57,6 @@ def download_dataset(argv):
         help="Ignore legal message.",
         action="store_true",
     )
-    # version
-    parser.add_argument(
-        "-V",
-        "--version",
-        action="version",
-        version="%(prog)s {version}".format(version=__version__),
-    )
 
     args, _ = parser.parse_known_args()
 
@@ -52,16 +65,18 @@ def download_dataset(argv):
         if user_input.lower() not in ["y", "yes"]:
             return
 
+    # create output folder
+    Path(args.output).mkdir(exist_ok=True, parents=True)
+
     if args.dataset is not None:
         d = Dataset(args.dataset)
         result = d.to_frame()
 
-        Path(args.output).parent.mkdir(exist_ok=True, parents=True)
         if args.output:
             result.to_csv(args.output, index=False)
     else:
         for dataset in iter_datasets():
-            print(f"Download dataset {dataset.name}")
+            print(f"Collect dataset {dataset.name}")
             dataset.to_frame().to_csv(Path(args.output, f"{dataset.name}.csv"), index=False)
 
 
@@ -78,9 +93,6 @@ def list_datasets(argv):
         help="Table format.",
     )
     args = parser.parse_args(argv)
-
-    # add if statement
-    _raw_download_dataset()
 
     table_values = []
 
@@ -124,7 +136,9 @@ def show_dataset(argv):
 
 if __name__ == "__main__":
 
-    if sys.argv[1] == "list":
+    if len(sys.argv) == 1:
+        main()
+    elif sys.argv[1] == "list":
         list_datasets(sys.argv[2:])
     elif sys.argv[1] == "show":
         show_dataset(sys.argv[2:])
