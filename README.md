@@ -4,11 +4,12 @@
 
 # pyodss - Python package for ODSS dataset
 
-## Philosophy
+The PYODSS package is the easiest way to download the PYODSS dataset to your
+local device.
 
 ## Installation
 
-pyodss requires Python 3.6 or later.
+PYODSS requires Python 3.6 or later.
 
 ```sh
 pip install pyodss
@@ -16,17 +17,15 @@ pip install pyodss
 
 ## Getting started
 
-Download entire dataset
+Download the full dataset to folder of choice (`<FOLDER_TO_DOWNLOAD>`).
 
 ```sh
-pyodss -a
+pyodss download <FOLDER_TO_DOWNLOAD>
 ```
 
-Download single dataset
+Enter [Y] to continue downloading.
 
-```sh
-pyodss -d Appenzeller-Herzog_2020
-```
+For extensive documentation, see LINK.
 
 ## License
 

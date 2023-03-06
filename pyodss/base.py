@@ -1,27 +1,30 @@
-import argparse
 import csv
 import glob
 import json
-import logging
-from pathlib import Path
-from zipfile import ZipFile
 from io import BytesIO
+from pathlib import Path
 from urllib.request import urlopen
-from jsonpath_ng import jsonpath, parse
+from zipfile import ZipFile
 
 import pandas as pd
 from pyalex import Work
 
-WORK_MAPPING = {"id": lambda x: x["id"], "doi": lambda x: x["doi"], "title": lambda x: x["title"], "abstract": lambda x: x["abstract"]}
+WORK_MAPPING = {
+    "id": lambda x: x["id"],
+    "doi": lambda x: x["doi"],
+    "title": lambda x: x["title"],
+    "abstract": lambda x: x["abstract"],
+}
 
 RELEASE_VERSION = "v0.1"
-RELEASE_URL = f"https://github.com/asreview/systematic-review-datasets/archive/refs/tags/release/{RELEASE_VERSION}.zip"
-ODSS_PATH = Path("tmp","odss",f"systematic-review-datasets-release-{RELEASE_VERSION}")
+RELEASE_URL = f"https://github.com/asreview/systematic-review-datasets/archive/refs/tags/release/{RELEASE_VERSION}.zip"  # noqa
+ODSS_PATH = Path("tmp", "odss", f"systematic-review-datasets-release-{RELEASE_VERSION}")
 
 
 def _dataset_available():
 
     return ODSS_PATH.exists()
+
 
 def _raw_download_dataset(url=RELEASE_URL, path=ODSS_PATH):
 
@@ -29,7 +32,6 @@ def _raw_download_dataset(url=RELEASE_URL, path=ODSS_PATH):
 
     release_zip = ZipFile(BytesIO(urlopen(url).read()))
     release_zip.extractall(path=path)
-
 
 
 def iter_datasets(fp=ODSS_PATH):
@@ -62,7 +64,9 @@ class Dataset(object):
     def metadata_work(self):
 
         if not hasattr(self, "_metadata"):
-            with open(Path(ODSS_PATH, self.name, "publication_metadata.json"), "r") as f:
+            with open(
+                Path(ODSS_PATH, self.name, "publication_metadata.json"), "r"
+            ) as f:
                 self._metadata_work = json.load(f)
 
         return self._metadata_work
@@ -90,9 +94,7 @@ class Dataset(object):
             records[work["id"]] = record
 
         store = {}
-        with open(
-            Path(ODSS_PATH, self.name, "labels.csv"), newline=""
-        ) as idfile:
+        with open(Path(ODSS_PATH, self.name, "labels.csv"), newline="") as idfile:
             reader = csv.DictReader(idfile)
             for row in reader:
 

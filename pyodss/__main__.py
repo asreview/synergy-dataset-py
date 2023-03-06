@@ -1,15 +1,12 @@
 import argparse
-
+import sys
 from pathlib import Path
 
-from pyodss._version import __version__
-from pyodss.base import Dataset, iter_datasets, _raw_download_dataset
-import json
-import sys
-from glob import glob
-
-
 from tabulate import tabulate
+
+from pyodss._version import __version__
+from pyodss.base import Dataset
+from pyodss.base import iter_datasets
 
 
 def main():
@@ -77,8 +74,9 @@ def download_dataset(argv):
     else:
         for dataset in iter_datasets():
             print(f"Collect dataset {dataset.name}")
-            dataset.to_frame().to_csv(Path(args.output, f"{dataset.name}.csv"), index=False)
-
+            dataset.to_frame().to_csv(
+                Path(args.output, f"{dataset.name}.csv"), index=False
+            )
 
 
 def list_datasets(argv):
@@ -102,13 +100,28 @@ def list_datasets(argv):
             print(dataset.metadata["publication"]["openalex_id"], "No concepts found")
             continue
 
-        concepts = list(filter(lambda x: x["level"] == 0, dataset.metadata_work["concepts"]))
+        concepts = list(
+            filter(lambda x: x["level"] == 0, dataset.metadata_work["concepts"])
+        )
         concepts_str = ", ".join([x["display_name"] for x in concepts])
-        table_values.append(["{}".format(dataset.metadata["key"]), concepts_str, dataset.metadata["data"]["n_records"], dataset.metadata["data"]["n_records_included"]])
+        table_values.append(
+            [
+                "{}".format(dataset.metadata["key"]),
+                concepts_str,
+                dataset.metadata["data"]["n_records"],
+                dataset.metadata["data"]["n_records_included"],
+            ]
+        )
 
-    print("\n", tabulate(table_values,
-                         headers=["Dataset", "Field", "Count", "Included"],
-                         tablefmt=args.tablefmt), "\n")
+    print(
+        "\n",
+        tabulate(
+            table_values,
+            headers=["Dataset", "Field", "Count", "Included"],
+            tablefmt=args.tablefmt,
+        ),
+        "\n",
+    )
 
 
 def show_dataset(argv):

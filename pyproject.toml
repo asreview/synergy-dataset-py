@@ -15,13 +15,9 @@ classifiers = [
     "Programming Language :: Python :: 3.10"
 ]
 license = {text = "MIT"}
-dependencies = ["pyalex"]
 dynamic = ["version"]
 requires-python = ">=3.6"
-
-dependencies = [
-    "tabulate",
-]
+dependencies = ["pyalex", "tabulate"]
 
 [project.optional-dependencies]
 lint = ["flake8", "flake8-import-order"]
