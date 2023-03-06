@@ -3,14 +3,15 @@ import argparse
 from pathlib import Path
 
 from pyodss._version import __version__
-from pyodss.base import Dataset, iter_metadata
+from pyodss.base import Dataset, iter_datasets, _raw_download_dataset
 import json
 import sys
 from glob import glob
 
+
 from tabulate import tabulate
 
-def main():
+def download_dataset(argv):
 
     parser = argparse.ArgumentParser(
         prog="pyodss",
@@ -19,17 +20,15 @@ def main():
     parser.add_argument(
         "-d",
         "--dataset",
+        nargs="*",
+        default=None,
         help="Dataset name.",
     )
     parser.add_argument(
         "-o",
         "--output",
+        default="pyodss_dataset/",
         help="Dataset output path.",
-    )
-    parser.add_argument(
-        "-a",
-        "--all",
-        help="Download all datasets",
     )
     parser.add_argument(
         "-l",
@@ -53,12 +52,18 @@ def main():
         if user_input.lower() not in ["y", "yes"]:
             return
 
-    d = Dataset(args.dataset)
-    result = d.to_frame()
-    print(result)
+    if args.dataset is not None:
+        d = Dataset(args.dataset)
+        result = d.to_frame()
 
-    if args.output:
-        result.to_csv(args.output)
+        Path(args.output).parent.mkdir(exist_ok=True, parents=True)
+        if args.output:
+            result.to_csv(args.output, index=False)
+    else:
+        for dataset in iter_datasets():
+            print(f"Download dataset {dataset.name}")
+            dataset.to_frame().to_csv(Path(args.output, f"{dataset.name}.csv"), index=False)
+
 
 
 def list_datasets(argv):
@@ -74,19 +79,20 @@ def list_datasets(argv):
     )
     args = parser.parse_args(argv)
 
+    # add if statement
+    _raw_download_dataset()
+
     table_values = []
 
-    for dataset in sorted(glob(str(Path("..", "odss-release", "*")))):
+    for dataset in iter_datasets():
 
-        d = Dataset(dataset.split("/")[-1])
-
-        if "concepts" not in d.metadata_work:
-            print(d.metadata["publication"]["openalex_id"], "No concepts found")
+        if "concepts" not in dataset.metadata_work:
+            print(dataset.metadata["publication"]["openalex_id"], "No concepts found")
             continue
 
-        concepts = list(filter(lambda x: x["level"] == 0, d.metadata_work["concepts"]))
+        concepts = list(filter(lambda x: x["level"] == 0, dataset.metadata_work["concepts"]))
         concepts_str = ", ".join([x["display_name"] for x in concepts])
-        table_values.append(["{}".format(d.metadata["key"]), concepts_str, d.metadata["data"]["n_records"], d.metadata["data"]["n_records_included"]])
+        table_values.append(["{}".format(dataset.metadata["key"]), concepts_str, dataset.metadata["data"]["n_records"], dataset.metadata["data"]["n_records_included"]])
 
     print("\n", tabulate(table_values,
                          headers=["Dataset", "Field", "Count", "Included"],
@@ -122,5 +128,7 @@ if __name__ == "__main__":
         list_datasets(sys.argv[2:])
     elif sys.argv[1] == "show":
         show_dataset(sys.argv[2:])
+    elif sys.argv[1] == "download":
+        download_dataset(sys.argv[2:])
     else:
         main()

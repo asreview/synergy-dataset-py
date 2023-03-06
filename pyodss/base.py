@@ -5,36 +5,28 @@ import json
 import logging
 from pathlib import Path
 from zipfile import ZipFile
+from io import BytesIO
+from urllib.request import urlopen
 
 import pandas as pd
 from pyalex import Work
 
-WORK_MAPPING = {"title": lambda x: x["title"], "abstract": lambda x: x["abstract"]}
+WORK_MAPPING = {"id": lambda x: x["id"], "title": lambda x: x["title"], "abstract": lambda x: x["abstract"]}
+
+ODSS_PATH = Path("tmp","odss","systematic-review-datasets-release-v0.1")
+
+def iter_datasets(fp=ODSS_PATH):
+
+    for dataset in sorted(glob.glob(str(Path(fp, "*", "metadata.json")))):
+
+        yield Dataset(dataset.split("/")[-2])
 
 
-def iter_metadata(
-    metadata_fp=Path("..", "odss-release", f"metadata.json"),
-    works_fp=Path("..", "odss-release", f"metadata_works.json")
-):
+def _raw_download_dataset(url="https://github.com/asreview/systematic-review-datasets/archive/refs/tags/release/v0.1.zip", path=ODSS_PATH):
 
-    with open(works_fp, "r") as f:
-        works = json.load(f)
-
-    with open(metadata_fp, "r") as f:
-        metadata = json.load(f)
-
-    for dataset in metadata["datasets"]:
-
-        if "openalex_id" not in dataset["publication"]:
-            print("Failed to load dataset", dataset["key"])
-            continue
-
-        for w in works:
-
-            # print(dataset["publication"]["openalex_id"], w["id"])
-            if dataset["publication"]["openalex_id"] == w["id"]:
-                yield dataset, w
-                break
+    if not ODSS_PATH.exists():
+        release_zip = ZipFile(BytesIO(urlopen(url).read()))
+        release_zip.extractall(path=path)
 
 
 class Dataset(object):
@@ -48,7 +40,7 @@ class Dataset(object):
     def metadata(self):
 
         if not hasattr(self, "_metadata"):
-            with open(Path("..", "odss-release", self.name, "metadata.json"), "r") as f:
+            with open(Path(ODSS_PATH, self.name, "metadata.json"), "r") as f:
                 self._metadata = json.load(f)
 
         return self._metadata
@@ -57,14 +49,14 @@ class Dataset(object):
     def metadata_work(self):
 
         if not hasattr(self, "_metadata"):
-            with open(Path("..", "odss-release", self.name, "metadata_works.json"), "r") as f:
+            with open(Path(ODSS_PATH, self.name, "publication_metadata.json"), "r") as f:
                 self._metadata_work = json.load(f)
 
         return self._metadata_work
 
-    def iter_works(self):
+    def _iter_works(self):
 
-        with ZipFile(Path("..", "odss-release", self.name, "works.zip"), "r") as z:
+        with ZipFile(Path(ODSS_PATH, self.name, "works.zip"), "r") as z:
 
             for work_set in z.namelist():
                 with z.open(work_set) as f:
@@ -73,20 +65,20 @@ class Dataset(object):
                     for di in d:
                         yield Work(di)
 
-    def to_dict(self, variable=WORK_MAPPING):
+    def to_dict(self, variables=WORK_MAPPING):
 
         records = {}
-        for work in self.iter_works():
+        for work in self._iter_works():
 
             record = {}
-            for key, value in variable.items():
+            for key, value in variables.items():
                 record[key] = value(work)
 
             records[work["id"]] = record
 
         store = {}
         with open(
-            Path("..", "odss-release", self.name, f"{self.name}.csv"), newline=""
+            Path(ODSS_PATH, self.name, "labels.csv"), newline=""
         ) as idfile:
             reader = csv.DictReader(idfile)
             for row in reader:
@@ -94,11 +86,11 @@ class Dataset(object):
                 try:
                     store[row["openalex_id"]] = {
                         **records[row["openalex_id"]],
-                        "label_included": row["label_included"],
+                        "label_included": int(row["label_included"]),
                     }
                 except KeyError:
                     store[row["openalex_id"]] = {
-                        "label_included": row["label_included"]
+                        "label_included": int(row["label_included"])
                     }
 
         return store
