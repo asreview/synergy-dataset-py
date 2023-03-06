@@ -8,6 +8,22 @@ from pyodss._version import __version__
 from pyodss.base import Dataset
 from pyodss.base import iter_datasets
 
+LEGAL_NOTE = """
+Due to legal constraints, paper abstracts in ODSS cannot be published as
+plaintext. Abstract are instead stored as an inverted index. Inverted
+indexes store information about each word in a body of text, including
+the number of occurrences and the position of each occurrence. Read
+more:
+https://learn.microsoft.com/en-us/academic-services/graph/resources-faq
+
+For machine learning purposes, it can be useful to convert the inverted
+abstract back into plaintext locally. Keep in mind that paper abstracts
+in ODSS cannot be published as plaintext again. Therefore you can refer
+to the version of the ODSS dataset.
+
+Would you like to convert the inverted abstract to plaintext?
+"""
+
 
 def main():
 
@@ -58,8 +74,10 @@ def download_dataset(argv):
     args, _ = parser.parse_known_args()
 
     if not args.legal:
-        user_input = input("I agree with building dataset ([Y]es,[N]o):")
+        user_input = input(f"{LEGAL_NOTE} ([Y]es,[N]o):")
+        print("\n")
         if user_input.lower() not in ["y", "yes"]:
+            print("Not possible to build dataset")
             return
 
     # create output folder
