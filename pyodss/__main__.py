@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 from tabulate import tabulate
+import requests
 
 from pyodss._version import __version__
 from pyodss.base import Dataset
@@ -108,26 +109,36 @@ def list_datasets(argv):
         default="simple",
         help="Table format.",
     )
+    parser.add_argument(
+        "--n-topics",
+        default=2,
+        type=int,
+        help="The number of topics to display in the table.",
+    )
     args = parser.parse_args(argv)
 
     table_values = []
 
-    for dataset in iter_datasets():
+    for i, dataset in enumerate(iter_datasets()):
 
         if "concepts" not in dataset.metadata_work:
             print(dataset.metadata["publication"]["openalex_id"], "No concepts found")
-            continue
 
         concepts = list(
             filter(lambda x: x["level"] == 0, dataset.metadata_work["concepts"])
         )
-        concepts_str = ", ".join([x["display_name"] for x in concepts])
+
+        n_topics = args.n_topics if args.n_topics != -1 else len(concepts)
+        concepts_str = ", ".join([x["display_name"] for x in concepts[0:n_topics]])
         table_values.append(
             [
+                i+1,
                 "{}".format(dataset.metadata["key"]),
                 concepts_str,
                 dataset.metadata["data"]["n_records"],
                 dataset.metadata["data"]["n_records_included"],
+                round((dataset.metadata["data"]["n_records_included"] / dataset.metadata["data"]["n_records"])*100, 1),
+
             ]
         )
 
@@ -135,8 +146,9 @@ def list_datasets(argv):
         "\n",
         tabulate(
             table_values,
-            headers=["Dataset", "Field", "Count", "Included"],
+            headers=["Nr", "Dataset", "Field", "Count", "Included", "%"],
             tablefmt=args.tablefmt,
+            # showindex="Nr",
         ),
         "\n",
     )
@@ -162,7 +174,50 @@ def show_dataset(argv):
     concepts = list(filter(lambda x: x["level"] == 0, d.metadata_work["concepts"]))
     concepts_str = ", ".join([x["display_name"] for x in concepts])
 
-    print("Fields:", concepts_str)
+    print("Fields:", concepts_str, "\n\n")
+
+
+    print("Citation (APA)\n")
+    r = requests.get(d.metadata_work["doi"], headers={"accept": "text/x-bibliography; style=apa"})
+    print(r.text)
+
+
+
+def credit_dataset(argv):
+
+    parser = argparse.ArgumentParser(
+        prog="pyodss",
+        description="Credit authors of the datasets.",
+    )
+    args = parser.parse_args(argv)
+
+    authors = []
+
+    for i, dataset in enumerate(iter_datasets()):
+        for a in dataset.metadata_work["authorships"]:
+            authors.append(a["author"]["display_name"])
+
+    # # with orcid links
+    # authors = []
+
+    # for i, dataset in enumerate(iter_datasets()):
+    #     for a in dataset.metadata_work["authorships"]:
+
+    #         if "orcid" in a["author"] and a["author"]["orcid"]:
+    #             authors.append(f"[{a['author']['display_name']}]({a['author']['orcid']})")
+    #         else:
+    #             authors.append(a["author"]["display_name"])
+
+    print("\nWe would like to thank the following authors for openly sharing the data correponding their systematic review:\n")
+    print(", ".join(authors), "\n")
+
+    print("\nReferences:\n")
+
+    for i, dataset in enumerate(iter_datasets()):
+
+        print(f"[{dataset.metadata['key']}]", dataset.metadata["publication"]["citation"]["apa"])
+
+
 
 
 if __name__ == "__main__":
@@ -175,5 +230,7 @@ if __name__ == "__main__":
         show_dataset(sys.argv[2:])
     elif sys.argv[1] == "download":
         download_dataset(sys.argv[2:])
+    elif sys.argv[1] == "credits":
+        credit_dataset(sys.argv[2:])
     else:
         main()
