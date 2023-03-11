@@ -8,6 +8,7 @@ import requests
 from pyodss._version import __version__
 from pyodss.base import Dataset
 from pyodss.base import iter_datasets
+from pyodss.config import ODSS_PATH
 
 LEGAL_NOTE = """
 Due to legal constraints, paper abstracts in ODSS cannot be published as
@@ -132,13 +133,19 @@ def list_datasets(argv):
         concepts_str = ", ".join([x["display_name"] for x in concepts[0:n_topics]])
         table_values.append(
             [
-                i+1,
+                i + 1,
                 "{}".format(dataset.metadata["key"]),
                 concepts_str,
                 dataset.metadata["data"]["n_records"],
                 dataset.metadata["data"]["n_records_included"],
-                round((dataset.metadata["data"]["n_records_included"] / dataset.metadata["data"]["n_records"])*100, 1),
-
+                round(
+                    (
+                        dataset.metadata["data"]["n_records_included"]
+                        / dataset.metadata["data"]["n_records"]
+                    )
+                    * 100,
+                    1,
+                ),
             ]
         )
 
@@ -176,11 +183,11 @@ def show_dataset(argv):
 
     print("Fields:", concepts_str, "\n\n")
 
-
     print("Citation (APA)\n")
-    r = requests.get(d.metadata_work["doi"], headers={"accept": "text/x-bibliography; style=apa"})
+    r = requests.get(
+        d.metadata_work["doi"], headers={"accept": "text/x-bibliography; style=apa"}
+    )
     print(r.text)
-
 
 
 def credit_dataset(argv):
@@ -208,16 +215,19 @@ def credit_dataset(argv):
     #         else:
     #             authors.append(a["author"]["display_name"])
 
-    print("\nWe would like to thank the following authors for openly sharing the data correponding their systematic review:\n")
+    print(
+        "\nWe would like to thank the following authors for openly sharing the data correponding their systematic review:\n"
+    )
     print(", ".join(authors), "\n")
 
     print("\nReferences:\n")
 
     for i, dataset in enumerate(iter_datasets()):
 
-        print(f"[{dataset.metadata['key']}]", dataset.metadata["publication"]["citation"]["apa"])
-
-
+        print(
+            f"[{dataset.metadata['key']}]",
+            dataset.metadata["publication"]["citation"]["apa"],
+        )
 
 
 if __name__ == "__main__":

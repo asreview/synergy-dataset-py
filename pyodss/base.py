@@ -9,19 +9,14 @@ from zipfile import ZipFile
 import pandas as pd
 from pyalex import Work
 
+from pyodss.config import ODSS_PATH, RELEASE_URL, RELEASE_VERSION
+
 WORK_MAPPING = {
     "id": lambda x: x["id"],
     "doi": lambda x: x["doi"],
     "title": lambda x: x["title"],
     "abstract": lambda x: x["abstract"],
 }
-
-RELEASE_VERSION = "v0.1"
-RELEASE_URL = f"https://github.com/asreview/systematic-review-datasets/archive/refs/tags/release/{RELEASE_VERSION}.zip"  # noqa
-ODSS_PATH = Path("tmp", "odss", f"systematic-review-datasets-release-{RELEASE_VERSION}")
-
-# Use the following path for development
-ODSS_PATH = Path("..", "odss-release")
 
 
 def _dataset_available():
@@ -42,7 +37,9 @@ def iter_datasets(fp=ODSS_PATH):
     if not _dataset_available():
         _raw_download_dataset()
 
-    for dataset in sorted(glob.glob(str(Path(fp, "*", "metadata.json"))), key=lambda x: x.lower()):
+    for dataset in sorted(
+        glob.glob(str(Path(fp, "*", "metadata.json"))), key=lambda x: x.lower()
+    ):
 
         yield Dataset(dataset.split("/")[-2])
 
