@@ -13,7 +13,7 @@ except ImportError:
 
 from pyalex import Work
 
-from pyodss.config import ODSS_PATH, RELEASE_URL, RELEASE_VERSION
+from pyodss.config import DOWNLOAD_PATH, ODSS_PATH, RELEASE_URL, RELEASE_VERSION
 
 WORK_MAPPING = {
     "id": lambda x: x["id"],
@@ -28,9 +28,9 @@ def _dataset_available():
     return ODSS_PATH.exists()
 
 
-def _raw_download_dataset(url=RELEASE_URL, path=ODSS_PATH):
+def _raw_download_dataset(url=RELEASE_URL, path=DOWNLOAD_PATH):
 
-    print(f"Downloading version {RELEASE_VERSION} of ODSS.")
+    print(f"Downloading version {RELEASE_VERSION} of the ODSS dataset.")
 
     release_zip = ZipFile(BytesIO(urlopen(url).read()))
     release_zip.extractall(path=path)
