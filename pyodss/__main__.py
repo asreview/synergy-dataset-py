@@ -31,7 +31,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         prog="pyodss",
-        description="Python package for ODSS dataset. Use the commands download, show or list.",
+        description="Python package for ODSS dataset. Use the commands get, show or list.",
     )
     # version
     parser.add_argument(
@@ -259,6 +259,7 @@ def credit_dataset(argv):
 
 if __name__ == "__main__":
 
+    print(sys.argv)
     if len(sys.argv) == 1:
         main()
     elif sys.argv[1] == "list":
