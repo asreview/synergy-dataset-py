@@ -17,10 +17,11 @@ pip install pyodss
 
 ## Getting started
 
-Download the full dataset to folder of choice (`<FOLDER_TO_DOWNLOAD>`).
+Download the full dataset to folder `pyodss_dataset` (or another folder
+with `-d <FOLDER_TO_DOWNLOAD>`).
 
 ```sh
-pyodss download <FOLDER_TO_DOWNLOAD>
+pyodss get
 ```
 
 Enter [Y] to continue downloading.

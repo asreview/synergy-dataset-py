@@ -31,9 +31,9 @@ def _dataset_available():
     return ODSS_PATH.exists()
 
 
-def _raw_download_dataset(url=RELEASE_URL, path=DOWNLOAD_PATH):
+def download_raw_dataset(url=RELEASE_URL, path=DOWNLOAD_PATH):
 
-    print(f"Downloading version {RELEASE_VERSION} of the ODSS dataset.")
+    print(f"Downloading version {RELEASE_VERSION} of the ODSS dataset")
 
     release_zip = ZipFile(BytesIO(urlopen(url).read()))
     release_zip.extractall(path=path)
@@ -42,7 +42,7 @@ def _raw_download_dataset(url=RELEASE_URL, path=DOWNLOAD_PATH):
 def iter_datasets(fp=ODSS_PATH):
 
     if not _dataset_available():
-        _raw_download_dataset()
+        download_raw_dataset()
 
     for dataset in sorted(
         glob.glob(str(Path(fp, "*", "metadata.json"))), key=lambda x: x.lower()

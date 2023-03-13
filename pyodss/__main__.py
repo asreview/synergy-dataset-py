@@ -7,6 +7,8 @@ from tabulate import tabulate
 
 from pyodss._version import __version__
 from pyodss.base import Dataset
+from pyodss.base import _dataset_available
+from pyodss.base import download_raw_dataset
 from pyodss.base import iter_datasets
 
 LEGAL_NOTE = """
@@ -22,8 +24,7 @@ abstract back into plaintext locally. Keep in mind that paper abstracts
 in ODSS cannot be published as plaintext again. Therefore you can refer
 to the version of the ODSS dataset.
 
-Would you like to convert the inverted abstract to plaintext?
-"""
+Would you like to convert the inverted abstract to plaintext?"""
 
 
 def main():
@@ -45,7 +46,7 @@ def main():
     parser.print_usage()
 
 
-def download_dataset(argv):
+def get_dataset(argv):
 
     parser = argparse.ArgumentParser(
         prog="pyodss",
@@ -75,27 +76,41 @@ def download_dataset(argv):
     args, _ = parser.parse_known_args()
 
     if not args.legal:
-        user_input = input(f"{LEGAL_NOTE} ([Y]es,[N]o):")
-        print("\n")
+        user_input = input(f"{LEGAL_NOTE} ([Y]es,[N]o):\n")
         if user_input.lower() not in ["y", "yes"]:
-            print("Not possible to build dataset")
-            return
 
-    # create output folder
-    Path(args.output).mkdir(exist_ok=True, parents=True)
+            if _dataset_available():
+                print(
+                    "ODSS dataset already downloaded, but not",
+                    "possible to build dataset (because of answer No).",
+                )
+            else:
+                print("Downloading dataset, but not possible to build dataset.")
+                print("Read more: LINK.")
+        else:
+            args.legal = True
 
-    if args.dataset is not None:
-        d = Dataset(args.dataset)
-        result = d.to_frame()
+    # download the dataset if note available
+    if not _dataset_available():
+        download_raw_dataset()
 
-        if args.output:
-            result.to_csv(args.output, index=False)
-    else:
-        for dataset in iter_datasets():
-            print(f"Collect dataset {dataset.name}")
-            dataset.to_frame().to_csv(
-                Path(args.output, f"{dataset.name}.csv"), index=False
-            )
+    if args.legal:
+
+        print("Building dataset")
+        # create output folder
+        Path(args.output).mkdir(exist_ok=True, parents=True)
+
+        if args.dataset is not None:
+            d = Dataset(args.dataset)
+            result = d.to_frame()
+
+            if args.output:
+                result.to_csv(args.output, index=False)
+        else:
+            for dataset in iter_datasets():
+                dataset.to_frame().to_csv(
+                    Path(args.output, f"{dataset.name}.csv"), index=False
+                )
 
 
 def list_datasets(argv):
@@ -216,7 +231,7 @@ def credit_dataset(argv):
 
     print(
         "\nWe would like to thank the following authors for openly",
-        "sharing the data correponding their systematic review:\n"
+        "sharing the data correponding their systematic review:\n",
     )
     print(", ".join(authors), "\n")
 
@@ -238,8 +253,8 @@ if __name__ == "__main__":
         list_datasets(sys.argv[2:])
     elif sys.argv[1] == "show":
         show_dataset(sys.argv[2:])
-    elif sys.argv[1] == "download":
-        download_dataset(sys.argv[2:])
+    elif sys.argv[1] == "get":
+        get_dataset(sys.argv[2:])
     elif sys.argv[1] == "credits":
         credit_dataset(sys.argv[2:])
     else:
