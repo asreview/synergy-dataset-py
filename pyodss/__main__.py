@@ -132,6 +132,10 @@ def list_datasets(argv):
     )
     args = parser.parse_args(argv)
 
+    # download the dataset if note available
+    if not _dataset_available():
+        download_raw_dataset()
+
     table_values = []
 
     for i, dataset in enumerate(iter_datasets()):
@@ -187,6 +191,10 @@ def show_dataset(argv):
     )
     args = parser.parse_args(argv)
 
+    # download the dataset if note available
+    if not _dataset_available():
+        download_raw_dataset()
+
     d = Dataset(args.dataset)
 
     print(d.metadata_work["display_name"])
@@ -211,6 +219,10 @@ def credit_dataset(argv):
         description="Credit authors of the datasets.",
     )
     parser.parse_args(argv)
+
+    # download the dataset if note available
+    if not _dataset_available():
+        download_raw_dataset()
 
     authors = []
 
