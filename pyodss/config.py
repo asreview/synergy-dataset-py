@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-RELEASE_VERSION = os.getenv("ODSS_VERSION") if os.getenv("ODSS_VERSION") else "v0.1"
+RELEASE_VERSION = os.getenv("ODSS_VERSION") if os.getenv("ODSS_VERSION") else "v0.2"
 RELEASE_URL = f"https://github.com/asreview/systematic-review-datasets/archive/refs/tags/release/{RELEASE_VERSION}.zip"  # noqa
 
 if os.getenv("ODSS_PATH") and os.getenv("ODSS_PATH") == "development":
