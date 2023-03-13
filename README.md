@@ -4,6 +4,8 @@
 
 # pyodss - Python package for ODSS dataset
 
+![PyPI](https://img.shields.io/pypi/v/pyodss)
+
 The PYODSS package is the easiest way to download the PYODSS dataset to your
 local device.
 
