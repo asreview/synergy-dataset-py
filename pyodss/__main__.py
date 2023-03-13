@@ -2,7 +2,6 @@ import argparse
 import sys
 from pathlib import Path
 
-import requests
 from tabulate import tabulate
 
 from pyodss._version import __version__
@@ -29,6 +28,21 @@ Would you like to convert the inverted abstract to plaintext?"""
 
 def main():
 
+    if len(sys.argv) == 1:
+        info()
+    elif sys.argv[1] == "list":
+        list_datasets(sys.argv[2:])
+    elif sys.argv[1] == "show":
+        show_dataset(sys.argv[2:])
+    elif sys.argv[1] == "get":
+        get_dataset(sys.argv[2:])
+    elif sys.argv[1] == "credits":
+        credit_dataset(sys.argv[2:])
+    else:
+        info()
+
+
+def info():
     parser = argparse.ArgumentParser(
         prog="pyodss",
         description="Python package for ODSS dataset. Use the commands get, show or list.",
@@ -206,10 +220,7 @@ def show_dataset(argv):
     print("Fields:", concepts_str, "\n\n")
 
     print("Citation (APA)\n")
-    r = requests.get(
-        d.metadata_work["doi"], headers={"accept": "text/x-bibliography; style=apa"}
-    )
-    print(r.text)
+    print(d.metadata["publication"]["citation"]["apa"])
 
 
 def credit_dataset(argv):
@@ -258,17 +269,4 @@ def credit_dataset(argv):
 
 
 if __name__ == "__main__":
-
-    print(sys.argv)
-    if len(sys.argv) == 1:
-        main()
-    elif sys.argv[1] == "list":
-        list_datasets(sys.argv[2:])
-    elif sys.argv[1] == "show":
-        show_dataset(sys.argv[2:])
-    elif sys.argv[1] == "get":
-        get_dataset(sys.argv[2:])
-    elif sys.argv[1] == "credits":
-        credit_dataset(sys.argv[2:])
-    else:
-        main()
+    main()
