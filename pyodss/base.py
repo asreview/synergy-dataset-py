@@ -6,7 +6,11 @@ from pathlib import Path
 from urllib.request import urlopen
 from zipfile import ZipFile
 
-import pandas as pd
+try:
+    import pandas as pd
+except ImportError:
+    pass
+
 from pyalex import Work
 
 from pyodss.config import ODSS_PATH, RELEASE_URL, RELEASE_VERSION
@@ -112,7 +116,9 @@ class Dataset(object):
 
     def to_frame(self, *args, **kwargs):
 
-        df = pd.DataFrame.from_dict(self.to_dict(*args, **kwargs), orient="index")
-        df.index.name = "openalex_id"
-
-        return df
+        try:
+            df = pd.DataFrame.from_dict(self.to_dict(*args, **kwargs), orient="index")
+            df.index.name = "openalex_id"
+            return df
+        except NameError:
+            raise ImportError("Install pandas to export to pandas.DataFrame")

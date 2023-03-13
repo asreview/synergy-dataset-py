@@ -2,13 +2,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from tabulate import tabulate
 import requests
+from tabulate import tabulate
 
 from pyodss._version import __version__
 from pyodss.base import Dataset
 from pyodss.base import iter_datasets
-from pyodss.config import ODSS_PATH
 
 LEGAL_NOTE = """
 Due to legal constraints, paper abstracts in ODSS cannot be published as
@@ -196,7 +195,7 @@ def credit_dataset(argv):
         prog="pyodss",
         description="Credit authors of the datasets.",
     )
-    args = parser.parse_args(argv)
+    parser.parse_args(argv)
 
     authors = []
 
@@ -216,7 +215,8 @@ def credit_dataset(argv):
     #             authors.append(a["author"]["display_name"])
 
     print(
-        "\nWe would like to thank the following authors for openly sharing the data correponding their systematic review:\n"
+        "\nWe would like to thank the following authors for openly",
+        "sharing the data correponding their systematic review:\n"
     )
     print(", ".join(authors), "\n")
 
