@@ -13,7 +13,10 @@ except ImportError:
 
 from pyalex import Work
 
-from pyodss.config import DOWNLOAD_PATH, ODSS_PATH, RELEASE_URL, RELEASE_VERSION
+from pyodss.config import DOWNLOAD_PATH
+from pyodss.config import ODSS_PATH
+from pyodss.config import RELEASE_URL
+from pyodss.config import RELEASE_VERSION
 
 WORK_MAPPING = {
     "id": lambda x: x["id"],
