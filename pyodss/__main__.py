@@ -10,14 +10,14 @@ from pyodss.base import Dataset
 from pyodss.base import iter_datasets
 
 LEGAL_NOTE = """
-Due to legal constraints, paper abstracts in ODSS cannot be published as
-plaintext. Abstract are instead stored as an inverted index. Inverted
+Due to legal constraints, paper abstracts in ODSS cannot be published in
+plaintext. Abstracts are instead stored as an inverted index. Inverted
 indexes store information about each word in a body of text, including
 the number of occurrences and the position of each occurrence. Read
 more:
 https://learn.microsoft.com/en-us/academic-services/graph/resources-faq
 
-For machine learning purposes, it can be useful to convert the inverted
+For machine learning purposes, it can be helpful to convert the inverted
 abstract back into plaintext locally. Keep in mind that paper abstracts
 in ODSS cannot be published as plaintext again. Therefore you can refer
 to the version of the ODSS dataset.
