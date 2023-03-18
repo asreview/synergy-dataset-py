@@ -18,20 +18,33 @@ from pyodss.config import ODSS_PATH
 from pyodss.config import RELEASE_URL
 from pyodss.config import RELEASE_VERSION
 
-WORK_MAPPING = {
-    "id": lambda x: x["id"],
-    "doi": lambda x: x["doi"],
-    "title": lambda x: x["title"],
-    "abstract": lambda x: x["abstract"],
-}
+# WORK_MAPPING = {
+#     "id": "id",
+#     "doi": "doi",
+#     "title": "title",
+#     "abstract": "abstract",
+# }
+WORK_MAPPING = ["id", "doi", "title", "abstract", "is_paratext"]
 
 
 def _dataset_available():
+    """Check if the dataset is available
+
+    Returns:
+        bool: True if the dataset is available
+    """
 
     return ODSS_PATH.exists()
 
 
 def download_raw_dataset(url=RELEASE_URL, path=DOWNLOAD_PATH):
+    """Download the raw dataset from the ODSS repository
+    
+    Args:
+        url (str, optional): URL to the ODSS dataset. Defaults to RELEASE_URL.
+        path (str, optional): Path to download the dataset to. Defaults to DOWNLOAD_PATH.
+
+        """
 
     print(f"Downloading version {RELEASE_VERSION} of the ODSS dataset")
 
@@ -40,6 +53,14 @@ def download_raw_dataset(url=RELEASE_URL, path=DOWNLOAD_PATH):
 
 
 def iter_datasets(fp=ODSS_PATH):
+    """Iterate over the available datasets
+
+    Args:
+        fp (str, optional): Path to the dataset. Defaults to ODSS_PATH.
+
+    Yields:
+        Dataset: Dataset object
+    """
 
     if not _dataset_available():
         download_raw_dataset()
@@ -52,7 +73,7 @@ def iter_datasets(fp=ODSS_PATH):
 
 
 class Dataset(object):
-    """ODSS Dataset"""
+    """Dataset object"""
 
     def __init__(self, name):
         super(Dataset, self).__init__()
@@ -60,6 +81,8 @@ class Dataset(object):
 
     @property
     def metadata(self):
+        """Metadata for the dataset
+        """
 
         if not hasattr(self, "_metadata"):
             with open(Path(ODSS_PATH, self.name, "metadata.json"), "r") as f:
@@ -69,8 +92,9 @@ class Dataset(object):
 
     @property
     def metadata_work(self):
+        """Metadata on the corresponding publication as work"""
 
-        if not hasattr(self, "_metadata"):
+        if not hasattr(self, "_metadata_work"):
             with open(
                 Path(ODSS_PATH, self.name, "publication_metadata.json"), "r"
             ) as f:
@@ -79,6 +103,11 @@ class Dataset(object):
         return self._metadata_work
 
     def _iter_works(self):
+        """Iterate over the works in the dataset
+
+        Yields:
+            Work: pyalex.Work object
+        """
 
         with ZipFile(Path(ODSS_PATH, self.name, "works.zip"), "r") as z:
 
@@ -90,15 +119,37 @@ class Dataset(object):
                         yield Work(di)
 
     def to_dict(self, variables=WORK_MAPPING):
+        """Export the dataset to a dictionary
+
+        Args:
+            variables (list, optional): List of variables to export. Defaults to WORK_MAPPING.
+
+        Returns:
+            dict: Dictionary of the dataset
+        """
 
         records = {}
         for work in self._iter_works():
 
-            record = {}
-            for key, value in variables.items():
-                record[key] = value(work)
+            if isinstance(variables, dict):
 
-            records[work["id"]] = record
+                record = {}
+                for key, value in variables.items():
+                    if isinstance(value, str):
+                        record[key] = work[value]
+                    else:
+                        record[key] = value(work)
+
+                records[work["id"]] = record
+            elif isinstance(variables, list):
+
+                record = {}
+                for key in variables:
+                    record[key] = work[key]
+
+                records[work["id"]] = record
+            else:
+                records[work["id"]] = work
 
         store = {}
         with open(Path(ODSS_PATH, self.name, "labels.csv"), newline="") as idfile:
@@ -118,6 +169,14 @@ class Dataset(object):
         return store
 
     def to_frame(self, *args, **kwargs):
+        """Export the dataset to a pandas.DataFrame
+
+        Args:
+            variables (list, optional): List of variables to export. Defaults to WORK_MAPPING.
+
+        Returns:
+            pandas.DataFrame: DataFrame of the dataset
+        """
 
         try:
             df = pd.DataFrame.from_dict(self.to_dict(*args, **kwargs), orient="index")

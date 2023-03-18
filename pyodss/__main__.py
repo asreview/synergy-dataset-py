@@ -36,8 +36,8 @@ def main():
         show_dataset(sys.argv[2:])
     elif sys.argv[1] == "get":
         get_dataset(sys.argv[2:])
-    elif sys.argv[1] == "credits":
-        credit_dataset(sys.argv[2:])
+    elif sys.argv[1] == "attribute":
+        attribute_dataset(sys.argv[2:])
     else:
         info()
 
@@ -152,10 +152,16 @@ def list_datasets(argv):
 
     table_values = []
 
+    n = 0
+    n_incl = 0
+
     for i, dataset in enumerate(iter_datasets()):
 
-        if "concepts" not in dataset.metadata_work:
-            print(dataset.metadata["publication"]["openalex_id"], "No concepts found")
+        n += dataset.metadata["data"]["n_records"]
+        n_incl += dataset.metadata["data"]["n_records_included"]
+
+        # if "concepts" not in dataset.metadata_work:
+        #     print(dataset.metadata["publication"]["openalex_id"], "No concepts found")
 
         concepts = list(
             filter(lambda x: x["level"] == 0, dataset.metadata_work["concepts"])
@@ -185,12 +191,14 @@ def list_datasets(argv):
         "\n",
         tabulate(
             table_values,
-            headers=["Nr", "Dataset", "Field", "Count", "Included", "%"],
+            headers=["Nr", "Dataset", "Field", "Records", "Included", "%"],
             tablefmt=args.tablefmt,
             # showindex="Nr",
         ),
         "\n",
     )
+
+    print(f"Total records = {n}, total inclusions {n_incl} ({n_incl/n*100:.2f}%)\n")
 
 
 def show_dataset(argv):
@@ -223,11 +231,11 @@ def show_dataset(argv):
     print(d.metadata["publication"]["citation"]["apa"])
 
 
-def credit_dataset(argv):
+def attribute_dataset(argv):
 
     parser = argparse.ArgumentParser(
         prog="pyodss",
-        description="Credit authors of the datasets.",
+        description="Attribute authors of the datasets.",
     )
     parser.parse_args(argv)
 
