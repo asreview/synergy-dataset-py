@@ -6,7 +6,7 @@ def test_iter():
     assert len(list(iter_datasets())) > 1
 
 
-def build_dataset():
+def test_build_dataset():
 
     d = Dataset("van_de_Schoot_2017")
 
