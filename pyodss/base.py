@@ -139,17 +139,21 @@ class Dataset(object):
                         record[key] = work[value]
                     else:
                         record[key] = value(work)
-
-                records[work["id"]] = record
             elif isinstance(variables, list):
 
                 record = {}
                 for key in variables:
                     record[key] = work[key]
-
-                records[work["id"]] = record
             else:
-                records[work["id"]] = work
+                record = work
+
+            # remove newlines
+            if "title" in record and record["title"]:
+                record["title"] = record["title"].replace('\n', ' ').replace('\r', '')
+            if "abstract" in record and record["abstract"]:
+                record["abstract"] = record["abstract"].replace('\n', ' ').replace('\r', '')
+
+            records[work["id"]] = record
 
         store = {}
         with open(Path(ODSS_PATH, self.name, "labels.csv"), newline="") as idfile:
