@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 from tabulate import tabulate
+from tqdm import tqdm
 
 from pyodss._version import __version__
 from pyodss.base import Dataset
@@ -121,7 +122,7 @@ def get_dataset(argv):
             if args.output:
                 result.to_csv(args.output, index=False)
         else:
-            for dataset in iter_datasets():
+            for dataset in tqdm(list(iter_datasets())):
                 dataset.to_frame().to_csv(
                     Path(args.output, f"{dataset.name}.csv"), index=False
                 )
