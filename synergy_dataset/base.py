@@ -13,18 +13,12 @@ except ImportError:
 
 from pyalex import Work
 
-from pyodss.config import DOWNLOAD_PATH
-from pyodss.config import ODSS_PATH
-from pyodss.config import RELEASE_URL
-from pyodss.config import RELEASE_VERSION
+from synergy_dataset.config import DOWNLOAD_PATH
+from synergy_dataset.config import SYNERGY_PATH
+from synergy_dataset.config import RELEASE_URL
+from synergy_dataset.config import RELEASE_VERSION
+from synergy_dataset.config import WORK_MAPPING
 
-# WORK_MAPPING = {
-#     "id": "id",
-#     "doi": "doi",
-#     "title": "title",
-#     "abstract": "abstract",
-# }
-WORK_MAPPING = ["id", "doi", "title", "abstract", "is_paratext"]
 
 
 def _dataset_available():
@@ -34,7 +28,7 @@ def _dataset_available():
         bool: True if the dataset is available
     """
 
-    return ODSS_PATH.exists()
+    return SYNERGY_PATH.exists()
 
 
 def download_raw_dataset(url=RELEASE_URL, path=DOWNLOAD_PATH):
@@ -52,11 +46,11 @@ def download_raw_dataset(url=RELEASE_URL, path=DOWNLOAD_PATH):
     release_zip.extractall(path=path)
 
 
-def iter_datasets(fp=ODSS_PATH):
+def iter_datasets(fp=SYNERGY_PATH):
     """Iterate over the available datasets
 
     Args:
-        fp (str, optional): Path to the dataset. Defaults to ODSS_PATH.
+        fp (str, optional): Path to the dataset. Defaults to SYNERGY_PATH.
 
     Yields:
         Dataset: Dataset object
@@ -85,7 +79,7 @@ class Dataset(object):
         """
 
         if not hasattr(self, "_metadata"):
-            with open(Path(ODSS_PATH, self.name, "metadata.json"), "r") as f:
+            with open(Path(SYNERGY_PATH, self.name, "metadata.json"), "r") as f:
                 self._metadata = json.load(f)
 
         return self._metadata
@@ -96,20 +90,20 @@ class Dataset(object):
 
         if not hasattr(self, "_metadata_work"):
             with open(
-                Path(ODSS_PATH, self.name, "publication_metadata.json"), "r"
+                Path(SYNERGY_PATH, self.name, "publication_metadata.json"), "r"
             ) as f:
                 self._metadata_work = json.load(f)
 
         return self._metadata_work
 
-    def _iter_works(self):
+    def iter_works(self):
         """Iterate over the works in the dataset
 
         Yields:
             Work: pyalex.Work object
         """
 
-        with ZipFile(Path(ODSS_PATH, self.name, "works.zip"), "r") as z:
+        with ZipFile(Path(SYNERGY_PATH, self.name, "works.zip"), "r") as z:
 
             for work_set in z.namelist():
                 with z.open(work_set) as f:
@@ -129,7 +123,7 @@ class Dataset(object):
         """
 
         records = {}
-        for work in self._iter_works():
+        for work in self.iter_works():
 
             if isinstance(variables, dict):
 
@@ -156,7 +150,7 @@ class Dataset(object):
             records[work["id"]] = record
 
         store = {}
-        with open(Path(ODSS_PATH, self.name, "labels.csv"), newline="") as idfile:
+        with open(Path(SYNERGY_PATH, self.name, "labels.csv"), newline="") as idfile:
             reader = csv.DictReader(idfile)
             for row in reader:
 

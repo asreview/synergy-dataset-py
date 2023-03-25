@@ -1,4 +1,4 @@
-from pyodss import iter_datasets, Dataset
+from synergy_dataset import iter_datasets, Dataset
 
 
 def test_iter():

@@ -1,6 +1,6 @@
 import networkx as nx
 
-from pyodss import Dataset
+from synergy_dataset import Dataset
 
 # load dataset
 d = Dataset("Appenzeller-Herzog_2020")

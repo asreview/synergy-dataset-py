@@ -5,24 +5,27 @@ from pathlib import Path
 from tabulate import tabulate
 from tqdm import tqdm
 
-from pyodss._version import __version__
-from pyodss.base import Dataset
-from pyodss.base import _dataset_available
-from pyodss.base import download_raw_dataset
-from pyodss.base import iter_datasets
+from synergy_dataset._version import __version__
+from synergy_dataset.base import Dataset
+from synergy_dataset.base import _dataset_available
+from synergy_dataset.base import download_raw_dataset
+from synergy_dataset.base import iter_datasets
+from synergy_dataset.config import WORK_MAPPING
+
 
 LEGAL_NOTE = """
-Due to legal constraints, paper abstracts in ODSS cannot be published in
+Due to legal constraints, paper abstracts in SYNERGY cannot be published in
 plaintext. Abstracts are instead stored as an inverted index. Inverted
 indexes store information about each word in a body of text, including
 the number of occurrences and the position of each occurrence. Read
 more:
-https://learn.microsoft.com/en-us/academic-services/graph/resources-faq
+- https://learn.microsoft.com/en-us/academic-services/graph/resources-faq
+- https://docs.openalex.org/api-entities/works/work-object
 
 For machine learning purposes, it can be helpful to convert the inverted
 abstract back into plaintext locally. Keep in mind that paper abstracts
-in ODSS cannot be published as plaintext again. Therefore you can refer
-to the version of the ODSS dataset.
+in SYNERGY cannot be published as plaintext again. Therefore you can refer
+to the version of the SYNERGY dataset.
 
 Would you like to convert the inverted abstract to plaintext?"""
 
@@ -36,7 +39,7 @@ def main():
     elif sys.argv[1] == "show":
         show_dataset(sys.argv[2:])
     elif sys.argv[1] == "get":
-        get_dataset(sys.argv[2:])
+        build_dataset(sys.argv[2:])
     elif sys.argv[1] == "attribute":
         attribute_dataset(sys.argv[2:])
     else:
@@ -45,8 +48,9 @@ def main():
 
 def info():
     parser = argparse.ArgumentParser(
-        prog="pyodss",
-        description="Python package for ODSS dataset. Use the commands get, show or list.",
+        prog="synergy",
+        description="Python package for SYNERGY dataset. "
+                    "Use the commands 'get', 'list' or 'attribute'."
     )
     # version
     parser.add_argument(
@@ -61,11 +65,11 @@ def info():
     parser.print_usage()
 
 
-def get_dataset(argv):
+def build_dataset(argv):
 
     parser = argparse.ArgumentParser(
-        prog="pyodss",
-        description="Python package for ODSS dataset.",
+        prog="synergy",
+        description="Python package for SYNERGY dataset.",
     )
     parser.add_argument(
         "-d",
@@ -77,8 +81,16 @@ def get_dataset(argv):
     parser.add_argument(
         "-o",
         "--output",
-        default="pyodss_dataset",
+        default="synergy_dataset",
         help="Dataset output path.",
+    )
+    parser.add_argument(
+        "-v",
+        "--vars",
+        default=",".join(WORK_MAPPING),
+        type=lambda x: x.split(","),
+        help="The variables to include. "
+             "Default '{}'.".format(",".join(WORK_MAPPING)),
     )
     parser.add_argument(
         "-l",
@@ -96,7 +108,7 @@ def get_dataset(argv):
 
             if _dataset_available():
                 print(
-                    "ODSS dataset already downloaded, but not",
+                    "SYNERGY dataset already downloaded, but not",
                     "possible to build dataset (because of answer No).",
                 )
             else:
@@ -123,7 +135,7 @@ def get_dataset(argv):
                 result.to_csv(args.output, index=False)
         else:
             for dataset in tqdm(list(iter_datasets())):
-                dataset.to_frame().to_csv(
+                dataset.to_frame(args.vars).to_csv(
                     Path(args.output, f"{dataset.name}.csv"), index=False
                 )
 
@@ -131,7 +143,7 @@ def get_dataset(argv):
 def list_datasets(argv):
 
     parser = argparse.ArgumentParser(
-        prog="pyodss",
+        prog="synergy",
         description="List datasets.",
     )
     parser.add_argument(
@@ -144,6 +156,12 @@ def list_datasets(argv):
         default=2,
         type=int,
         help="The number of topics to display in the table.",
+    )
+    parser.add_argument(
+        "--topic-level",
+        default=0,
+        type=int,
+        help="The level of the topics to display.",
     )
     args = parser.parse_args(argv)
 
@@ -165,7 +183,7 @@ def list_datasets(argv):
         #     print(dataset.metadata["publication"]["openalex_id"], "No concepts found")
 
         concepts = list(
-            filter(lambda x: x["level"] == 0, dataset.metadata_work["concepts"])
+            filter(lambda x: x["level"] == args.topic_level, dataset.metadata_work["concepts"])
         )
 
         n_topics = args.n_topics if args.n_topics != -1 else len(concepts)
@@ -205,7 +223,7 @@ def list_datasets(argv):
 def show_dataset(argv):
 
     parser = argparse.ArgumentParser(
-        prog="pyodss",
+        prog="synergy",
         description="Show dataset.",
     )
     parser.add_argument(
@@ -235,7 +253,7 @@ def show_dataset(argv):
 def attribute_dataset(argv):
 
     parser = argparse.ArgumentParser(
-        prog="pyodss",
+        prog="synergy",
         description="Attribute authors of the datasets.",
     )
     parser.parse_args(argv)

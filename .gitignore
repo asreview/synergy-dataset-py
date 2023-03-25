@@ -1,7 +1,6 @@
-pyodss_dataset
 tmp
 
-pyodss/_version.py
+synergy_dataset/_version.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
