@@ -67,7 +67,7 @@ def iter_datasets(fp=SYNERGY_PATH):
 
 
 class Dataset(object):
-    """Dataset object"""
+    """Dataset object belonging to a systematic review"""
 
     def __init__(self, name):
         super(Dataset, self).__init__()
@@ -96,11 +96,26 @@ class Dataset(object):
 
         return self._metadata_work
 
-    def iter_works(self):
+    @property
+    def labels(self):
+        """Metadata on the corresponding publication as work"""
+
+        if not hasattr(self, "_labels"):
+            self._labels = {}
+            with open(Path(SYNERGY_PATH, self.name, "labels.csv"), newline="") as idfile:
+                reader = csv.DictReader(idfile)
+                for row in reader:
+                    self._labels[row["openalex_id"]] = int(row["label_included"])
+
+            return self._labels
+
+        return self._labels
+
+    def iter(self):
         """Iterate over the works in the dataset
 
         Yields:
-            Work: pyalex.Work object
+            Work: pyalex.Work object, label
         """
 
         with ZipFile(Path(SYNERGY_PATH, self.name, "works.zip"), "r") as z:
@@ -110,7 +125,7 @@ class Dataset(object):
                     d = json.loads(f.read())
 
                     for di in d:
-                        yield Work(di)
+                        yield Work(di), self.labels[di["id"]]
 
     def to_dict(self, variables=WORK_MAPPING):
         """Export the dataset to a dictionary
@@ -123,7 +138,7 @@ class Dataset(object):
         """
 
         records = {}
-        for work in self.iter_works():
+        for work, label_included in self.iter():
 
             if isinstance(variables, dict):
 
@@ -147,24 +162,10 @@ class Dataset(object):
             if "abstract" in record and record["abstract"]:
                 record["abstract"] = record["abstract"].replace('\n', ' ').replace('\r', '')
 
+            record["label_included"] = label_included
             records[work["id"]] = record
 
-        store = {}
-        with open(Path(SYNERGY_PATH, self.name, "labels.csv"), newline="") as idfile:
-            reader = csv.DictReader(idfile)
-            for row in reader:
-
-                try:
-                    store[row["openalex_id"]] = {
-                        **records[row["openalex_id"]],
-                        "label_included": int(row["label_included"]),
-                    }
-                except KeyError:
-                    store[row["openalex_id"]] = {
-                        "label_included": int(row["label_included"])
-                    }
-
-        return store
+        return records
 
     def to_frame(self, *args, **kwargs):
         """Export the dataset to a pandas.DataFrame

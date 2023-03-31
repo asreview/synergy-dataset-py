@@ -6,7 +6,8 @@ RELEASE_URL = f"https://github.com/asreview/systematic-review-datasets/archive/r
 DOWNLOAD_PATH = Path("tmp", "synergy_dataset_raw")
 
 if os.getenv("SYNERGY_PATH") and os.getenv("SYNERGY_PATH") == "development":
-    SYNERGY_PATH = Path(__file__).parent.parent.parent / "odss-release"
+    SYNERGY_PATH = Path(__file__).parent.parent.parent / "synergy-release"
+    print("Running development version of SYNERGY dataset.")
 elif os.getenv("SYNERGY_PATH"):
     SYNERGY_PATH = os.getenv("SYNERGY_PATH")
 else:
