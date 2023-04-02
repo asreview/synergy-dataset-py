@@ -7,7 +7,7 @@ DOWNLOAD_PATH = Path("tmp", "synergy_dataset_raw")
 
 if os.getenv("SYNERGY_PATH") and os.getenv("SYNERGY_PATH") == "development":
     SYNERGY_PATH = Path(__file__).parent.parent.parent / "synergy-release-abstracts"
-    print("Running development version of SYNERGY dataset.")
+    print(f"Running development version of SYNERGY dataset at {SYNERGY_PATH}.")
 elif os.getenv("SYNERGY_PATH"):
     SYNERGY_PATH = os.getenv("SYNERGY_PATH")
 else:
