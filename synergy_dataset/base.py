@@ -32,15 +32,15 @@ def _dataset_available():
 
 
 def download_raw_dataset(url=RELEASE_URL, path=DOWNLOAD_PATH):
-    """Download the raw dataset from the ODSS repository
-    
+    """Download the raw dataset from the SYNERGY repository
+
     Args:
-        url (str, optional): URL to the ODSS dataset. Defaults to RELEASE_URL.
+        url (str, optional): URL to the SYNERGY dataset. Defaults to RELEASE_URL.
         path (str, optional): Path to download the dataset to. Defaults to DOWNLOAD_PATH.
 
         """
 
-    print(f"Downloading version {RELEASE_VERSION} of the ODSS dataset")
+    print(f"Downloading version {RELEASE_VERSION} of the SYNERGY dataset")
 
     release_zip = ZipFile(BytesIO(urlopen(url).read()))
     release_zip.extractall(path=path)
@@ -74,6 +74,28 @@ class Dataset(object):
         self.name = name
 
     @property
+    def cite(self):
+        """Citation for the publication
+        """
+
+        if not hasattr(self, "_cite"):
+            with open(Path(SYNERGY_PATH, self.name, "CITATION.txt"), "r") as f:
+                self._cite = f.read()
+
+        return self._cite
+
+    @property
+    def cite_collection(self):
+        """Citation for the collection
+        """
+
+        if not hasattr(self, "_cite_collection"):
+            with open(Path(SYNERGY_PATH, self.name, "CITATION_collection.txt"), "r") as f:
+                self._cite_collection = f.read()
+
+        return self._cite_collection
+
+    @property
     def metadata(self):
         """Metadata for the dataset
         """
@@ -81,20 +103,16 @@ class Dataset(object):
         if not hasattr(self, "_metadata"):
             with open(Path(SYNERGY_PATH, self.name, "metadata.json"), "r") as f:
                 self._metadata = json.load(f)
+            with open(Path(SYNERGY_PATH, self.name, "metadata_publication.json"), "r") as f:
+                self._metadata["publication"] = json.load(f)
+
+            try:
+                with open(Path(SYNERGY_PATH, self.name, "metadata_collection.json"), "r") as f:
+                    self._metadata["collection"] = json.load(f)
+            except FileNotFoundError:
+                pass
 
         return self._metadata
-
-    @property
-    def metadata_work(self):
-        """Metadata on the corresponding publication as work"""
-
-        if not hasattr(self, "_metadata_work"):
-            with open(
-                Path(SYNERGY_PATH, self.name, "publication_metadata.json"), "r"
-            ) as f:
-                self._metadata_work = json.load(f)
-
-        return self._metadata_work
 
     @property
     def labels(self):
@@ -118,14 +136,18 @@ class Dataset(object):
             Work: pyalex.Work object, label
         """
 
-        with ZipFile(Path(SYNERGY_PATH, self.name, "works.zip"), "r") as z:
+        p_zipped_works = str(Path(SYNERGY_PATH, self.name, "works_*.zip"))
 
-            for work_set in z.namelist():
-                with z.open(work_set) as f:
-                    d = json.loads(f.read())
+        for f_work in glob.glob(p_zipped_works):
 
-                    for di in d:
-                        yield Work(di), self.labels[di["id"]]
+            with ZipFile(f_work, "r") as z:
+
+                for work_set in z.namelist():
+                    with z.open(work_set) as f:
+                        d = json.loads(f.read())
+
+                        for di in d:
+                            yield Work(di), self.labels[di["id"]]
 
     def to_dict(self, variables=WORK_MAPPING):
         """Export the dataset to a dictionary

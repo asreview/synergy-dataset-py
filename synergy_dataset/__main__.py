@@ -124,6 +124,11 @@ def build_dataset(argv):
     if args.legal:
 
         print("Building dataset")
+
+        if Path(args.output).exists() and any(Path(args.output).iterdir()):
+            print(f"Folder '{args.output}' is not empty")
+            exit(1)
+
         # create output folder
         Path(args.output).mkdir(exist_ok=True, parents=True)
 
@@ -179,11 +184,11 @@ def list_datasets(argv):
         n += dataset.metadata["data"]["n_records"]
         n_incl += dataset.metadata["data"]["n_records_included"]
 
-        # if "concepts" not in dataset.metadata_work:
+        # if "concepts" not in dataset.metadata["publication"]:
         #     print(dataset.metadata["publication"]["openalex_id"], "No concepts found")
 
         concepts = list(
-            filter(lambda x: x["level"] == args.topic_level, dataset.metadata_work["concepts"])
+            filter(lambda x: x["level"] == args.topic_level, dataset.metadata["publication"]["concepts"])
         )
 
         n_topics = args.n_topics if args.n_topics != -1 else len(concepts)
@@ -210,7 +215,7 @@ def list_datasets(argv):
         "\n",
         tabulate(
             table_values,
-            headers=["Nr", "Dataset", "Field", "Records", "Included", "%"],
+            headers=["Nr", "Dataset", "Topic(s)", "Records", "Included", "%"],
             tablefmt=args.tablefmt,
             # showindex="Nr",
         ),
@@ -238,16 +243,16 @@ def show_dataset(argv):
 
     d = Dataset(args.dataset)
 
-    print(d.metadata_work["display_name"])
-    print(d.metadata_work["publication_year"])
+    print(d.metadata["publication"]["display_name"])
+    print(d.metadata["publication"]["publication_year"])
 
-    concepts = list(filter(lambda x: x["level"] == 0, d.metadata_work["concepts"]))
+    concepts = list(filter(lambda x: x["level"] == 0, d.metadata["publication"]["concepts"]))
     concepts_str = ", ".join([x["display_name"] for x in concepts])
 
     print("Fields:", concepts_str, "\n\n")
 
     print("Citation (APA)\n")
-    print(d.metadata["publication"]["citation"]["apa"])
+    print(d.cite)
 
 
 def attribute_dataset(argv):
@@ -256,28 +261,34 @@ def attribute_dataset(argv):
         prog="synergy",
         description="Attribute authors of the datasets.",
     )
-    parser.parse_args(argv)
+    parser.add_argument(
+        "--show-url",
+        help="Show the URL to the ORCID page of the author.",
+        action="store_true",
+    )
+    args = parser.parse_args(argv)
 
     # download the dataset if note available
     if not _dataset_available():
         download_raw_dataset()
 
-    authors = []
+    # without url
+    if not args.show_url:
+        authors = []
 
-    for i, dataset in enumerate(iter_datasets()):
-        for a in dataset.metadata_work["authorships"]:
-            authors.append(a["author"]["display_name"])
+        for i, dataset in enumerate(iter_datasets()):
+            for a in dataset.metadata["publication"]["authorships"]:
+                authors.append(a["author"]["display_name"])
+    else:
+        authors = []
 
-    # # with orcid links
-    # authors = []
+        for i, dataset in enumerate(iter_datasets()):
+            for a in dataset.metadata["publication"]["authorships"]:
 
-    # for i, dataset in enumerate(iter_datasets()):
-    #     for a in dataset.metadata_work["authorships"]:
-
-    #         if "orcid" in a["author"] and a["author"]["orcid"]:
-    #             authors.append(f"[{a['author']['display_name']}]({a['author']['orcid']})")
-    #         else:
-    #             authors.append(a["author"]["display_name"])
+                if "orcid" in a["author"] and a["author"]["orcid"]:
+                    authors.append(f"[{a['author']['display_name']}]({a['author']['orcid']})")
+                else:
+                    authors.append(a["author"]["display_name"])
 
     print(
         "\nWe would like to thank the following authors for openly",
@@ -285,15 +296,27 @@ def attribute_dataset(argv):
     )
     print(", ".join(authors), "\n")
 
-    print("\nReferences:\n")
+    print("\nReferences to datasets:\n")
 
     for i, dataset in enumerate(iter_datasets()):
 
         print(
             f"[{dataset.metadata['key']}]",
-            dataset.metadata["publication"]["citation"]["apa"],
+            dataset.cite,
         )
 
+    print(
+        "\nWe thank the authors of the following collections",
+        "of systematic reviews:\n")
+
+    collections = []
+    for i, dataset in enumerate(iter_datasets()):
+        try:
+            collections.append(dataset.cite_collection)
+        except FileNotFoundError:
+            pass
+
+    print("\n".join(list(set(collections))))
 
 if __name__ == "__main__":
     main()
