@@ -50,7 +50,7 @@ def info():
     parser = argparse.ArgumentParser(
         prog="synergy",
         description="Python package for SYNERGY dataset. "
-                    "Use the commands 'get', 'list' or 'attribute'."
+                    "Use the commands 'get', 'list', 'show' or 'attribute'."
     )
     # version
     parser.add_argument(
@@ -243,16 +243,30 @@ def show_dataset(argv):
 
     d = Dataset(args.dataset)
 
-    print(d.metadata["publication"]["display_name"])
-    print(d.metadata["publication"]["publication_year"])
+    print(f"\n{d.cite}")
 
     concepts = list(filter(lambda x: x["level"] == 0, d.metadata["publication"]["concepts"]))
     concepts_str = ", ".join([x["display_name"] for x in concepts])
 
-    print("Fields:", concepts_str, "\n\n")
+    print("Topics:")
+    print("\t(level=0):", concepts_str)
 
-    print("Citation (APA)\n")
-    print(d.cite)
+    concepts = list(filter(lambda x: x["level"] != 0, d.metadata["publication"]["concepts"]))
+    concepts_str = ", ".join([x["display_name"] for x in concepts])
+
+    print("\t(level=1+):", concepts_str, "\n")
+
+    print("Data for this publication can be found at:")
+    if "doi" in d.metadata["data"]:
+        print("https://doi.org/" + d.metadata["data"]["doi"])
+    if "url" in d.metadata["data"]:
+        print(d.metadata["data"]["url"])
+    print("")
+
+    try:
+        print(f"This dataset is part of a collection: \n{d.cite_collection}")
+    except FileNotFoundError:
+        pass
 
 
 def attribute_dataset(argv):
