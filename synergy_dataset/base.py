@@ -1,6 +1,7 @@
 import csv
 import glob
 import json
+import os
 from io import BytesIO
 from pathlib import Path
 from urllib.request import urlopen
@@ -13,12 +14,36 @@ except ImportError:
 
 from pyalex import Work
 
-from synergy_dataset.config import DOWNLOAD_PATH
-from synergy_dataset.config import SYNERGY_PATH
-from synergy_dataset.config import RELEASE_URL
-from synergy_dataset.config import RELEASE_VERSION
-from synergy_dataset.config import WORK_MAPPING
+WORK_MAPPING = ["doi", "title", "abstract"]
 
+SYNERGY_VERSION = (
+    os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "v0.2"
+)
+SYNERGY_PATH = os.getenv("SYNERGY_PATH")
+
+
+def _get_path_raw_dataset():
+
+    if SYNERGY_PATH and SYNERGY_PATH == "development":
+        return Path(__file__).parent.parent.parent / "synergy-release"
+    elif SYNERGY_PATH:
+        return SYNERGY_PATH
+    else:
+        return Path(
+            "~", ".synergy_dataset_source", f"synergy-release-{SYNERGY_VERSION}"
+        )
+
+
+def _get_download_url(version=None, source="github"):
+
+    if version is None:
+        version = SYNERGY_VERSION
+
+    if source == "github":
+        github_url = "https://github.com/asreview/systematic-review-datasets/archive/refs/tags/release/{}.zip"  # noqa
+        return github_url.format(version)
+    else:
+        raise ValueError("Unknown source")
 
 
 def _dataset_available():
@@ -28,29 +53,34 @@ def _dataset_available():
         bool: True if the dataset is available
     """
 
-    return SYNERGY_PATH.exists()
+    return _get_path_raw_dataset().exists()
 
 
-def download_raw_dataset(url=RELEASE_URL, path=DOWNLOAD_PATH):
+def download_raw_dataset(url=None, path=None):
     """Download the raw dataset from the SYNERGY repository
 
     Args:
-        url (str, optional): URL to the SYNERGY dataset. Defaults to RELEASE_URL.
-        path (str, optional): Path to download the dataset to. Defaults to DOWNLOAD_PATH.
+        url (str, optional): URL to the SYNERGY dataset.
+        Defaults to latest github release.
+        path (str, optional): Path to download the dataset to.
+        Defaults to ~/.synergy_dataset_source.
 
-        """
+    """
 
-    print(f"Downloading version {RELEASE_VERSION} of the SYNERGY dataset")
+    print(f"Downloading version {SYNERGY_VERSION} of the SYNERGY dataset")
+
+    if url is None:
+        url = _get_download_url()
+
+    if path is None:
+        path = _get_path_raw_dataset()
 
     release_zip = ZipFile(BytesIO(urlopen(url).read()))
     release_zip.extractall(path=path)
 
 
-def iter_datasets(fp=SYNERGY_PATH):
+def iter_datasets():
     """Iterate over the available datasets
-
-    Args:
-        fp (str, optional): Path to the dataset. Defaults to SYNERGY_PATH.
 
     Yields:
         Dataset: Dataset object
@@ -60,7 +90,8 @@ def iter_datasets(fp=SYNERGY_PATH):
         download_raw_dataset()
 
     for dataset in sorted(
-        glob.glob(str(Path(fp, "*", "metadata.json"))), key=lambda x: x.lower()
+        glob.glob(str(Path(_get_path_raw_dataset(), "*", "metadata.json"))),
+        key=lambda x: x.lower(),
     ):
 
         yield Dataset(dataset.split("/")[-2])
@@ -75,39 +106,50 @@ class Dataset(object):
 
     @property
     def cite(self):
-        """Citation for the publication
-        """
+        """Citation for the publication"""
 
         if not hasattr(self, "_cite"):
-            with open(Path(SYNERGY_PATH, self.name, "CITATION.txt"), "r") as f:
+            with open(
+                Path(_get_path_raw_dataset(), self.name, "CITATION.txt"), "r"
+            ) as f:
                 self._cite = f.read()
 
         return self._cite
 
     @property
     def cite_collection(self):
-        """Citation for the collection
-        """
+        """Citation for the collection"""
 
         if not hasattr(self, "_cite_collection"):
-            with open(Path(SYNERGY_PATH, self.name, "CITATION_collection.txt"), "r") as f:
+            with open(
+                Path(_get_path_raw_dataset(), self.name, "CITATION_collection.txt"), "r"
+            ) as f:
                 self._cite_collection = f.read()
 
         return self._cite_collection
 
     @property
     def metadata(self):
-        """Metadata for the dataset
-        """
+        """Metadata for the dataset"""
 
         if not hasattr(self, "_metadata"):
-            with open(Path(SYNERGY_PATH, self.name, "metadata.json"), "r") as f:
+            with open(
+                Path(_get_path_raw_dataset(), self.name, "metadata.json"), "r"
+            ) as f:
                 self._metadata = json.load(f)
-            with open(Path(SYNERGY_PATH, self.name, "metadata_publication.json"), "r") as f:
+            with open(
+                Path(_get_path_raw_dataset(), self.name, "metadata_publication.json"),
+                "r",
+            ) as f:
                 self._metadata["publication"] = json.load(f)
 
             try:
-                with open(Path(SYNERGY_PATH, self.name, "metadata_collection.json"), "r") as f:
+                with open(
+                    Path(
+                        _get_path_raw_dataset(), self.name, "metadata_collection.json"
+                    ),
+                    "r",
+                ) as f:
                     self._metadata["collection"] = json.load(f)
             except FileNotFoundError:
                 pass
@@ -120,7 +162,9 @@ class Dataset(object):
 
         if not hasattr(self, "_labels"):
             self._labels = {}
-            with open(Path(SYNERGY_PATH, self.name, "labels.csv"), newline="") as idfile:
+            with open(
+                Path(_get_path_raw_dataset(), self.name, "labels.csv"), newline=""
+            ) as idfile:
                 reader = csv.DictReader(idfile)
                 for row in reader:
                     self._labels[row["openalex_id"]] = int(row["label_included"])
@@ -136,7 +180,7 @@ class Dataset(object):
             Work: pyalex.Work object, label
         """
 
-        p_zipped_works = str(Path(SYNERGY_PATH, self.name, "works_*.zip"))
+        p_zipped_works = str(Path(_get_path_raw_dataset(), self.name, "works_*.zip"))
 
         for f_work in glob.glob(p_zipped_works):
 
@@ -180,9 +224,11 @@ class Dataset(object):
 
             # remove newlines
             if "title" in record and record["title"]:
-                record["title"] = record["title"].replace('\n', ' ').replace('\r', '')
+                record["title"] = record["title"].replace("\n", " ").replace("\r", "")
             if "abstract" in record and record["abstract"]:
-                record["abstract"] = record["abstract"].replace('\n', ' ').replace('\r', '')
+                record["abstract"] = (
+                    record["abstract"].replace("\n", " ").replace("\r", "")
+                )
 
             record["label_included"] = label_included
             records[work["id"]] = record

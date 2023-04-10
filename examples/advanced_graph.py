@@ -19,4 +19,4 @@ G.remove_nodes_from(set(G.nodes) - set([n[0] for n in nodes]))
 print("Number of nodes", len(G.nodes))
 print("Number of edges", len(G.edges))
 
-nx.write_gexf(G, f"Appenzeller-Herzog_2020_network.gexf")
+nx.write_gexf(G, "Appenzeller-Herzog_2020_network.gexf")

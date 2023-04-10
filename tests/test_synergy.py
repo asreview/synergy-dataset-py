@@ -1,4 +1,5 @@
-from synergy_dataset import iter_datasets, Dataset
+from synergy_dataset import Dataset
+from synergy_dataset import iter_datasets
 
 
 def test_iter():

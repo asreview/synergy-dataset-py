@@ -17,4 +17,4 @@ ignore =
     # ambiguous variable name
     E741,
 
-application_import_names = pyodss
+application_import_names = synergy_dataset

@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -7,11 +8,11 @@ from tqdm import tqdm
 
 from synergy_dataset._version import __version__
 from synergy_dataset.base import Dataset
+from synergy_dataset.base import WORK_MAPPING
 from synergy_dataset.base import _dataset_available
+from synergy_dataset.base import _get_path_raw_dataset
 from synergy_dataset.base import download_raw_dataset
 from synergy_dataset.base import iter_datasets
-from synergy_dataset.config import WORK_MAPPING
-
 
 LEGAL_NOTE = """
 Due to legal constraints, paper abstracts in SYNERGY cannot be published in
@@ -32,6 +33,10 @@ Would you like to convert the inverted abstract to plaintext?"""
 
 def main():
 
+    if os.getenv("SYNERGY_PATH") == "development":
+        p = _get_path_raw_dataset()
+        print(f"Running development version of SYNERGY dataset at {p}.")
+
     if len(sys.argv) == 1:
         info()
     elif sys.argv[1] == "list":
@@ -50,7 +55,7 @@ def info():
     parser = argparse.ArgumentParser(
         prog="synergy",
         description="Python package for SYNERGY dataset. "
-                    "Use the commands 'get', 'list', 'show' or 'attribute'."
+        "Use the commands 'get', 'list', 'show' or 'attribute'.",
     )
     # version
     parser.add_argument(
@@ -72,13 +77,6 @@ def build_dataset(argv):
         description="Python package for SYNERGY dataset.",
     )
     parser.add_argument(
-        "-d",
-        "--dataset",
-        nargs="*",
-        default=None,
-        help="Dataset name.",
-    )
-    parser.add_argument(
         "-o",
         "--output",
         default="synergy_dataset",
@@ -90,7 +88,14 @@ def build_dataset(argv):
         default=",".join(WORK_MAPPING),
         type=lambda x: x.split(","),
         help="The variables to include. "
-             "Default '{}'.".format(",".join(WORK_MAPPING)),
+        "Default '{}'.".format(",".join(WORK_MAPPING)),
+    )
+    parser.add_argument(
+        "-d",
+        "--dataset",
+        nargs="*",
+        default=None,
+        help="Dataset name.",
     )
     parser.add_argument(
         "-l",
@@ -188,7 +193,10 @@ def list_datasets(argv):
         #     print(dataset.metadata["publication"]["openalex_id"], "No concepts found")
 
         concepts = list(
-            filter(lambda x: x["level"] == args.topic_level, dataset.metadata["publication"]["concepts"])
+            filter(
+                lambda x: x["level"] == args.topic_level,
+                dataset.metadata["publication"]["concepts"],
+            )
         )
 
         n_topics = args.n_topics if args.n_topics != -1 else len(concepts)
@@ -245,13 +253,17 @@ def show_dataset(argv):
 
     print(f"\n{d.cite}")
 
-    concepts = list(filter(lambda x: x["level"] == 0, d.metadata["publication"]["concepts"]))
+    concepts = list(
+        filter(lambda x: x["level"] == 0, d.metadata["publication"]["concepts"])
+    )
     concepts_str = ", ".join([x["display_name"] for x in concepts])
 
     print("Topics:")
     print("\t(level=0):", concepts_str)
 
-    concepts = list(filter(lambda x: x["level"] != 0, d.metadata["publication"]["concepts"]))
+    concepts = list(
+        filter(lambda x: x["level"] != 0, d.metadata["publication"]["concepts"])
+    )
     concepts_str = ", ".join([x["display_name"] for x in concepts])
 
     print("\t(level=1+):", concepts_str, "\n")
@@ -300,7 +312,9 @@ def attribute_dataset(argv):
             for a in dataset.metadata["publication"]["authorships"]:
 
                 if "orcid" in a["author"] and a["author"]["orcid"]:
-                    authors.append(f"[{a['author']['display_name']}]({a['author']['orcid']})")
+                    authors.append(
+                        f"[{a['author']['display_name']}]({a['author']['orcid']})"
+                    )
                 else:
                     authors.append(a["author"]["display_name"])
 
@@ -321,7 +335,8 @@ def attribute_dataset(argv):
 
     print(
         "\nWe thank the authors of the following collections",
-        "of systematic reviews:\n")
+        "of systematic reviews:\n",
+    )
 
     collections = []
     for i, dataset in enumerate(iter_datasets()):
@@ -331,6 +346,7 @@ def attribute_dataset(argv):
             pass
 
     print("\n".join(list(set(collections))))
+
 
 if __name__ == "__main__":
     main()
