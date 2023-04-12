@@ -230,7 +230,12 @@ def list_datasets(argv):
         "\n",
     )
 
-    print(f"Total records = {n}, total inclusions {n_incl} ({n_incl/n*100:.2f}%)\n")
+    try:
+        perc = f"{n_incl/n*100:.2f}"
+    except ZeroDivisionError:
+        perc = "NA"
+
+    print(f"Total records = {n}, total inclusions {n_incl} ({perc}%)\n")
 
 
 def show_dataset(argv):

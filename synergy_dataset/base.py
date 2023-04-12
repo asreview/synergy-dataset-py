@@ -17,21 +17,20 @@ from pyalex import Work
 WORK_MAPPING = ["doi", "title", "abstract"]
 
 SYNERGY_VERSION = (
-    os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "v0.2"
+    os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "1.0"
 )
 SYNERGY_PATH = os.getenv("SYNERGY_PATH")
+SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
 
 
-def _get_path_raw_dataset():
+def _get_path_raw_dataset(version=SYNERGY_VERSION):
 
     if SYNERGY_PATH and SYNERGY_PATH == "development":
         return Path(__file__).parent.parent.parent / "synergy-release"
     elif SYNERGY_PATH:
-        return SYNERGY_PATH
+        return Path(SYNERGY_PATH).expanduser()
     else:
-        return Path(
-            "~", ".synergy_dataset_source", f"synergy-release-{SYNERGY_VERSION}"
-        )
+        return Path(SYNERGY_ROOT, f"systematic-review-datasets-{version}")
 
 
 def _get_download_url(version=None, source="github"):
@@ -40,7 +39,7 @@ def _get_download_url(version=None, source="github"):
         version = SYNERGY_VERSION
 
     if source == "github":
-        github_url = "https://github.com/asreview/systematic-review-datasets/archive/refs/tags/release/{}.zip"  # noqa
+        github_url = "https://github.com/asreview/systematic-review-datasets/archive/refs/tags/v{}.zip"  # noqa
         return github_url.format(version)
     else:
         raise ValueError("Unknown source")
@@ -56,7 +55,7 @@ def _dataset_available():
     return _get_path_raw_dataset().exists()
 
 
-def download_raw_dataset(url=None, path=None):
+def download_raw_dataset(url=None, path=SYNERGY_ROOT):
     """Download the raw dataset from the SYNERGY repository
 
     Args:
@@ -71,9 +70,6 @@ def download_raw_dataset(url=None, path=None):
 
     if url is None:
         url = _get_download_url()
-
-    if path is None:
-        path = _get_path_raw_dataset()
 
     release_zip = ZipFile(BytesIO(urlopen(url).read()))
     release_zip.extractall(path=path)
