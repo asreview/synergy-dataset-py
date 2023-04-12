@@ -15,7 +15,7 @@ pip install synergy-dataset
 
 ## Getting started
 
-See [https://github.com/asreview/systematic-review-datasets](https://github.com/asreview/systematic-review-datasets) for documentation and getting started.
+See [https://github.com/asreview/synergy-dataset](https://github.com/asreview/synergy-dataset) for documentation and getting started.
 
 ## License
 
@@ -23,4 +23,4 @@ See [https://github.com/asreview/systematic-review-datasets](https://github.com/
 
 ## Contact
 
-See [https://github.com/asreview/systematic-review-datasets](https://github.com/asreview/systematic-review-datasets) for contact details.
+See [https://github.com/asreview/synergy-dataset](https://github.com/asreview/synergy-dataset) for contact details.
