@@ -89,8 +89,7 @@ def iter_datasets():
         glob.glob(str(Path(_get_path_raw_dataset(), "*", "metadata.json"))),
         key=lambda x: x.lower(),
     ):
-
-        yield Dataset(dataset.split("/")[-2])
+        yield Dataset(Path(dataset).parts[-2])
 
 
 class Dataset(object):
