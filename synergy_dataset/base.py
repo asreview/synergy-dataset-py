@@ -17,7 +17,7 @@ from pyalex import Work
 WORK_MAPPING = ["doi", "title", "abstract"]
 
 SYNERGY_VERSION = (
-    os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "v1.0rc0"
+    os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "1.0rc0"
 )
 SYNERGY_PATH = os.getenv("SYNERGY_PATH")
 SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
@@ -39,7 +39,7 @@ def _get_download_url(version=None, source="github"):
         version = SYNERGY_VERSION
 
     if source == "github":
-        github_url = "https://github.com/asreview/systematic-review-datasets/archive/refs/tags/{}.zip"  # noqa
+        github_url = "https://github.com/asreview/systematic-review-datasets/archive/refs/tags/v{}.zip"  # noqa
         return github_url.format(version)
     else:
         raise ValueError("Unknown source")
