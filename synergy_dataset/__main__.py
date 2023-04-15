@@ -298,9 +298,9 @@ def attribute_dataset(argv):
         description="Attribute authors of the datasets.",
     )
     parser.add_argument(
-        "--show-url",
-        help="Show the URL to the ORCID page of the author.",
-        action="store_true",
+        "--format",
+        default="text",
+        help="Show the attribution in text or markdown. Default text.",
     )
     args = parser.parse_args(argv)
 
@@ -309,13 +309,13 @@ def attribute_dataset(argv):
         download_raw_dataset()
 
     # without url
-    if not args.show_url:
+    if args.format == "text":
         authors = []
 
         for i, dataset in enumerate(iter_datasets()):
             for a in dataset.metadata["publication"]["authorships"]:
                 authors.append(a["author"]["display_name"])
-    else:
+    elif args.format == "markdown":
         authors = []
 
         for i, dataset in enumerate(iter_datasets()):
@@ -327,19 +327,23 @@ def attribute_dataset(argv):
                     )
                 else:
                     authors.append(a["author"]["display_name"])
+    else:
+        raise ValueError(f"Format not found '{args.format}'")
 
     print(
         "\nWe would like to thank the following authors for openly",
         "sharing the data correponding their systematic review:\n",
     )
-    print(", ".join(authors), "\n")
+
+    print(", ".join(list(set(authors))), "\n")
 
     print("\nReferences to datasets:\n")
+    prefix = "" if args.format == "text" else "> "
 
     for i, dataset in enumerate(iter_datasets()):
 
         print(
-            f"[{dataset.metadata['key']}]",
+            f"{prefix}[{dataset.metadata['key']}]",
             dataset.cite,
         )
 
@@ -355,7 +359,8 @@ def attribute_dataset(argv):
         except FileNotFoundError:
             pass
 
-    print("\n".join(list(set(collections))))
+    for c in sorted(list(set(collections))):
+        print(f"{prefix}{c}")
 
 
 if __name__ == "__main__":
