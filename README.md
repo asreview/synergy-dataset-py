@@ -1,4 +1,4 @@
-# synergy - Python package for the SYNERGY dataset
+# Python package for the SYNERGY dataset
 
 ![PyPI](https://img.shields.io/pypi/v/synergy-dataset)
 
