@@ -138,11 +138,16 @@ def build_dataset(argv):
         Path(args.output).mkdir(exist_ok=True, parents=True)
 
         if args.dataset is not None:
-            d = Dataset(args.dataset)
-            result = d.to_frame()
 
-            if args.output:
-                result.to_csv(args.output, index=False)
+            for name in args.dataset:
+                d = Dataset(name)
+                result = d.to_frame()
+
+                if args.output:
+                    result.to_csv(
+                        Path(args.output, f"{name}.csv"),
+                        index=False
+                    )
         else:
             for dataset in tqdm(list(iter_datasets())):
                 dataset.to_frame(args.vars).to_csv(
