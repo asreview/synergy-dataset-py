@@ -109,7 +109,7 @@ def build_dataset(argv):
 
     if not args.legal:
         user_input = input(f"{LEGAL_NOTE} ([Y]es,[N]o):\n")
-        if user_input.lower() not in ["y", "yes"]:
+        if user_input.lower() in ["n", "no"]:
 
             if _dataset_available():
                 print(
@@ -117,10 +117,15 @@ def build_dataset(argv):
                     "possible to build dataset (because of answer No).",
                 )
             else:
-                print("Downloading dataset, but not possible to build dataset.")
-                print("Read more: LINK.")
-        else:
+                print(
+                    "Downloading dataset, but not"
+                    "possible to build dataset (because of answer No)."
+                )
+        elif user_input.lower() in ["y", "yes"]:
             args.legal = True
+        else:
+            print("Not a valid answer.")
+            exit(1)
 
     # download the dataset if note available
     if not _dataset_available():
