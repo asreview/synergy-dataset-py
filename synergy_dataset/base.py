@@ -24,7 +24,6 @@ SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
 
 
 def _get_path_raw_dataset(version=SYNERGY_VERSION):
-
     if SYNERGY_PATH and SYNERGY_PATH == "development":
         return Path(__file__).parent.parent.parent / "synergy-release"
     elif SYNERGY_PATH:
@@ -34,7 +33,6 @@ def _get_path_raw_dataset(version=SYNERGY_VERSION):
 
 
 def _get_download_url(version=None, source="github"):
-
     if version is None:
         version = SYNERGY_VERSION
 
@@ -66,10 +64,10 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT):
 
     """
 
-    print(f"Downloading version {SYNERGY_VERSION} of the SYNERGY dataset")
-
     if url is None:
         url = _get_download_url()
+
+    print(f"Downloading version {SYNERGY_VERSION} of the SYNERGY dataset...")
 
     release_zip = ZipFile(BytesIO(urlopen(url).read()))
     release_zip.extractall(path=path)
@@ -105,7 +103,9 @@ class Dataset(object):
 
         if not hasattr(self, "_cite"):
             with open(
-                Path(_get_path_raw_dataset(), self.name, "CITATION.txt"), "r"
+                Path(_get_path_raw_dataset(), self.name, "CITATION.txt"),
+                "r",
+                encoding="utf-8",
             ) as f:
                 self._cite = f.read()
 
@@ -117,7 +117,9 @@ class Dataset(object):
 
         if not hasattr(self, "_cite_collection"):
             with open(
-                Path(_get_path_raw_dataset(), self.name, "CITATION_collection.txt"), "r"
+                Path(_get_path_raw_dataset(), self.name, "CITATION_collection.txt"),
+                "r",
+                encoding="utf-8",
             ) as f:
                 self._cite_collection = f.read()
 
@@ -129,12 +131,15 @@ class Dataset(object):
 
         if not hasattr(self, "_metadata"):
             with open(
-                Path(_get_path_raw_dataset(), self.name, "metadata.json"), "r"
+                Path(_get_path_raw_dataset(), self.name, "metadata.json"),
+                "r",
+                encoding="utf-8",
             ) as f:
                 self._metadata = json.load(f)
             with open(
                 Path(_get_path_raw_dataset(), self.name, "metadata_publication.json"),
                 "r",
+                encoding="utf-8",
             ) as f:
                 self._metadata["publication"] = json.load(f)
 
@@ -144,6 +149,7 @@ class Dataset(object):
                         _get_path_raw_dataset(), self.name, "metadata_collection.json"
                     ),
                     "r",
+                    encoding="utf-8",
                 ) as f:
                     self._metadata["collection"] = json.load(f)
             except FileNotFoundError:
@@ -158,7 +164,9 @@ class Dataset(object):
         if not hasattr(self, "_labels"):
             self._labels = {}
             with open(
-                Path(_get_path_raw_dataset(), self.name, "labels.csv"), newline=""
+                Path(_get_path_raw_dataset(), self.name, "labels.csv"),
+                newline="",
+                encoding="utf-8",
             ) as idfile:
                 reader = csv.DictReader(idfile)
                 for row in reader:
@@ -178,9 +186,7 @@ class Dataset(object):
         p_zipped_works = str(Path(_get_path_raw_dataset(), self.name, "works_*.zip"))
 
         for f_work in glob.glob(p_zipped_works):
-
             with ZipFile(f_work, "r") as z:
-
                 for work_set in z.namelist():
                     with z.open(work_set) as f:
                         d = json.loads(f.read())
@@ -200,9 +206,7 @@ class Dataset(object):
 
         records = {}
         for work, label_included in self.iter():
-
             if isinstance(variables, dict):
-
                 record = {}
                 for key, value in variables.items():
                     if isinstance(value, str):
@@ -210,7 +214,6 @@ class Dataset(object):
                     else:
                         record[key] = value(work)
             elif isinstance(variables, list):
-
                 record = {}
                 for key in variables:
                     record[key] = work[key]

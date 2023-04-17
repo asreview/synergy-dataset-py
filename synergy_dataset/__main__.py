@@ -32,7 +32,6 @@ Would you like to convert the inverted abstract to plaintext?"""
 
 
 def main():
-
     if os.getenv("SYNERGY_PATH") == "development":
         p = _get_path_raw_dataset()
         print(f"Running development version of SYNERGY dataset at {p}.")
@@ -71,7 +70,6 @@ def info():
 
 
 def build_dataset(argv):
-
     parser = argparse.ArgumentParser(
         prog="synergy",
         description="Python package for SYNERGY dataset.",
@@ -110,7 +108,6 @@ def build_dataset(argv):
     if not args.legal:
         user_input = input(f"{LEGAL_NOTE} ([Y]es,[N]o):\n")
         if user_input.lower() in ["n", "no"]:
-
             if _dataset_available():
                 print(
                     "SYNERGY dataset already downloaded, but not",
@@ -132,7 +129,6 @@ def build_dataset(argv):
         download_raw_dataset()
 
     if args.legal:
-
         print("Building dataset")
 
         if Path(args.output).exists() and any(Path(args.output).iterdir()):
@@ -143,16 +139,12 @@ def build_dataset(argv):
         Path(args.output).mkdir(exist_ok=True, parents=True)
 
         if args.dataset is not None:
-
             for name in args.dataset:
                 d = Dataset(name)
                 result = d.to_frame()
 
                 if args.output:
-                    result.to_csv(
-                        Path(args.output, f"{name}.csv"),
-                        index=False
-                    )
+                    result.to_csv(Path(args.output, f"{name}.csv"), index=False)
         else:
             for dataset in tqdm(list(iter_datasets())):
                 dataset.to_frame(args.vars).to_csv(
@@ -161,7 +153,6 @@ def build_dataset(argv):
 
 
 def list_datasets(argv):
-
     parser = argparse.ArgumentParser(
         prog="synergy",
         description="List datasets.",
@@ -195,7 +186,6 @@ def list_datasets(argv):
     n_incl = 0
 
     for i, dataset in enumerate(iter_datasets()):
-
         n += dataset.metadata["data"]["n_records"]
         n_incl += dataset.metadata["data"]["n_records_included"]
 
@@ -249,7 +239,6 @@ def list_datasets(argv):
 
 
 def show_dataset(argv):
-
     parser = argparse.ArgumentParser(
         prog="synergy",
         description="Show dataset.",
@@ -297,7 +286,6 @@ def show_dataset(argv):
 
 
 def attribute_dataset(argv):
-
     parser = argparse.ArgumentParser(
         prog="synergy",
         description="Attribute authors of the datasets.",
@@ -325,7 +313,6 @@ def attribute_dataset(argv):
 
         for i, dataset in enumerate(iter_datasets()):
             for a in dataset.metadata["publication"]["authorships"]:
-
                 if "orcid" in a["author"] and a["author"]["orcid"]:
                     authors.append(
                         f"[{a['author']['display_name']}]({a['author']['orcid']})"
@@ -346,7 +333,6 @@ def attribute_dataset(argv):
     prefix = "" if args.format == "text" else "> "
 
     for i, dataset in enumerate(iter_datasets()):
-
         print(
             f"{prefix}[{dataset.metadata['key']}]",
             dataset.cite,
