@@ -164,15 +164,9 @@ def list_datasets(argv):
     )
     parser.add_argument(
         "--n-topics",
-        default=2,
+        default=3,
         type=int,
         help="The number of topics to display in the table.",
-    )
-    parser.add_argument(
-        "--topic-level",
-        default=0,
-        type=int,
-        help="The level of the topics to display.",
     )
     args = parser.parse_args(argv)
 
@@ -189,16 +183,7 @@ def list_datasets(argv):
         n += dataset.metadata["data"]["n_records"]
         n_incl += dataset.metadata["data"]["n_records_included"]
 
-        # if "concepts" not in dataset.metadata["publication"]:
-        #     print(dataset.metadata["publication"]["openalex_id"], "No concepts found")
-
-        concepts = list(
-            filter(
-                lambda x: x["level"] == args.topic_level,
-                dataset.metadata["publication"]["concepts"],
-            )
-        )
-
+        concepts = dataset.metadata["data"]["concepts"]["included"]
         n_topics = args.n_topics if args.n_topics != -1 else len(concepts)
         concepts_str = ", ".join([x["display_name"] for x in concepts[0:n_topics]])
         table_values.append(
