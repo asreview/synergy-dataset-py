@@ -29,7 +29,7 @@ def _get_path_raw_dataset(version=SYNERGY_VERSION):
     elif SYNERGY_PATH:
         return Path(SYNERGY_PATH).expanduser()
     else:
-        return Path(SYNERGY_ROOT, f"systematic-review-datasets-{version}")
+        return Path(SYNERGY_ROOT, f"synergy-dataset-{version}")
 
 
 def _get_download_url(version=None, source="github"):
@@ -37,7 +37,7 @@ def _get_download_url(version=None, source="github"):
         version = SYNERGY_VERSION
 
     if source == "github":
-        github_url = "https://github.com/asreview/systematic-review-datasets/archive/refs/tags/v{}.zip"  # noqa
+        github_url = "https://github.com/asreview/synergy-dataset/archive/refs/tags/v{}.zip"  # noqa
         return github_url.format(version)
     else:
         raise ValueError("Unknown source")
