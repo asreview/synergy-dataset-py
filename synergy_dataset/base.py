@@ -204,7 +204,7 @@ class Dataset(object):
             dict: Dictionary of the dataset
         """
 
-        records = {}
+        records = {k: None for k, v in self.labels.items()}
         for work, label_included in self.iter():
             if isinstance(variables, dict):
                 record = {}
