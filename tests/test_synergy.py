@@ -14,7 +14,7 @@ def test_build_dataset():
     d.to_dict()
 
 
-@pytest.mark.parametrize("dataset_name", [("Walker_2018",), ("van_de_Schoot_2018",)])
+@pytest.mark.parametrize("dataset_name", ["Walker_2018", "van_de_Schoot_2018"])
 def test_order_iter_dataset(dataset_name):
     d = Dataset(dataset_name)
 
