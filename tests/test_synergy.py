@@ -7,6 +7,6 @@ def test_iter():
 
 
 def test_build_dataset():
-    d = Dataset("van_de_Schoot_2017")
+    d = Dataset("van_de_Schoot_2018")
 
     d.to_dict()
