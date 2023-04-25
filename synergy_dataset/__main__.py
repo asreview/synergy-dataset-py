@@ -7,8 +7,8 @@ from tabulate import tabulate
 from tqdm import tqdm
 
 from synergy_dataset._version import __version__
-from synergy_dataset.base import Dataset
 from synergy_dataset.base import WORK_MAPPING
+from synergy_dataset.base import Dataset
 from synergy_dataset.base import _dataset_available
 from synergy_dataset.base import _get_path_raw_dataset
 from synergy_dataset.base import download_raw_dataset
