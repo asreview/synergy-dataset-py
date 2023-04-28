@@ -44,17 +44,16 @@ def _get_download_url(version=None, source="github"):
 
 
 def _dataset_available():
-    """Check if the dataset is available
+    """Check if the dataset is available.
 
     Returns:
         bool: True if the dataset is available
     """
-
     return _get_path_raw_dataset().exists()
 
 
 def download_raw_dataset(url=None, path=SYNERGY_ROOT):
-    """Download the raw dataset from the SYNERGY repository
+    """Download the raw dataset from the SYNERGY repository.
 
     Args:
         url (str, optional): URL to the SYNERGY dataset.
@@ -63,7 +62,6 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT):
         Defaults to ~/.synergy_dataset_source.
 
     """
-
     if url is None:
         url = _get_download_url()
 
@@ -74,12 +72,11 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT):
 
 
 def iter_datasets():
-    """Iterate over the available datasets
+    """Iterate over the available datasets.
 
     Yields:
         Dataset: Dataset object
     """
-
     if not _dataset_available():
         download_raw_dataset()
 
@@ -90,21 +87,18 @@ def iter_datasets():
         yield Dataset(Path(dataset).parts[-2])
 
 
-class Dataset(object):
-    """Dataset object belonging to a systematic review"""
-
+class Dataset:
+    """Dataset object belonging to a systematic review."""
     def __init__(self, name):
-        super(Dataset, self).__init__()
+        super().__init__()
         self.name = name
 
     @property
     def cite(self):
-        """Citation for the publication"""
-
+        """Citation for the publication."""
         if not hasattr(self, "_cite"):
             with open(
                 Path(_get_path_raw_dataset(), self.name, "CITATION.txt"),
-                "r",
                 encoding="utf-8",
             ) as f:
                 self._cite = f.read()
@@ -113,12 +107,10 @@ class Dataset(object):
 
     @property
     def cite_collection(self):
-        """Citation for the collection"""
-
+        """Citation for the collection."""
         if not hasattr(self, "_cite_collection"):
             with open(
                 Path(_get_path_raw_dataset(), self.name, "CITATION_collection.txt"),
-                "r",
                 encoding="utf-8",
             ) as f:
                 self._cite_collection = f.read()
@@ -127,18 +119,15 @@ class Dataset(object):
 
     @property
     def metadata(self):
-        """Metadata for the dataset"""
-
+        """Metadata for the dataset."""
         if not hasattr(self, "_metadata"):
             with open(
                 Path(_get_path_raw_dataset(), self.name, "metadata.json"),
-                "r",
                 encoding="utf-8",
             ) as f:
                 self._metadata = json.load(f)
             with open(
                 Path(_get_path_raw_dataset(), self.name, "metadata_publication.json"),
-                "r",
                 encoding="utf-8",
             ) as f:
                 self._metadata["publication"] = json.load(f)
@@ -148,7 +137,6 @@ class Dataset(object):
                     Path(
                         _get_path_raw_dataset(), self.name, "metadata_collection.json"
                     ),
-                    "r",
                     encoding="utf-8",
                 ) as f:
                     self._metadata["collection"] = json.load(f)
@@ -159,8 +147,7 @@ class Dataset(object):
 
     @property
     def labels(self):
-        """Metadata on the corresponding publication as work"""
-
+        """Metadata on the corresponding publication as work."""
         if not hasattr(self, "_labels"):
             self._labels = {}
             with open(
@@ -177,12 +164,11 @@ class Dataset(object):
         return self._labels
 
     def iter(self):
-        """Iterate over the works in the dataset
+        """Iterate over the works in the dataset.
 
         Yields:
             Work: pyalex.Work object, label
         """
-
         p_zipped_works = str(Path(_get_path_raw_dataset(), self.name, "works_*.zip"))
 
         for f_work in glob.glob(p_zipped_works):
@@ -195,15 +181,15 @@ class Dataset(object):
                             yield Work(di), self.labels[di["id"]]
 
     def to_dict(self, variables=WORK_MAPPING):
-        """Export the dataset to a dictionary
+        """Export the dataset to a dictionary.
 
         Args:
-            variables (list, optional): List of variables to export. Defaults to WORK_MAPPING.
+            variables (list, optional): List of variables to export.
+            Defaults to WORK_MAPPING.
 
         Returns:
             dict: Dictionary of the dataset
         """
-
         records = {k: None for k, v in self.labels.items()}
         for work, label_included in self.iter():
             if isinstance(variables, dict):
@@ -234,15 +220,15 @@ class Dataset(object):
         return records
 
     def to_frame(self, *args, **kwargs):
-        """Export the dataset to a pandas.DataFrame
+        """Export the dataset to a pandas.DataFrame.
 
         Args:
-            variables (list, optional): List of variables to export. Defaults to WORK_MAPPING.
+            variables (list, optional): List of variables to export.
+            Defaults to WORK_MAPPING.
 
         Returns:
             pandas.DataFrame: DataFrame of the dataset
         """
-
         try:
             df = pd.DataFrame.from_dict(self.to_dict(*args, **kwargs), orient="index")
             df.index.name = "openalex_id"

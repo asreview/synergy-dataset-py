@@ -42,3 +42,18 @@ write_to = "synergy_dataset/_version.py"
 force_single_line = true
 multi_line_output = 7
 profile = "black"
+
+[tool.ruff]
+select = [
+  "E",   # pycodestyle
+  "F",   # pyflakes
+  "UP",  # pyupgrade
+  "I",  # isort
+  # "D",  # pydocstyle
+]
+
+[tool.ruff.pydocstyle]
+convention = "google"
+
+[tool.ruff.isort]
+force-single-line = true
