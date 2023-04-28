@@ -38,7 +38,11 @@ packages = ["synergy_dataset"]
 [tool.setuptools_scm]
 write_to = "synergy_dataset/_version.py"
 
-[tool.isort]
-force_single_line = true
-multi_line_output = 7
-profile = "black"
+[tool.ruff]
+select = ["E", "F", "UP", "I", "B"]
+
+[tool.ruff.pydocstyle]
+convention = "google"
+
+[tool.ruff.isort]
+force-single-line = true

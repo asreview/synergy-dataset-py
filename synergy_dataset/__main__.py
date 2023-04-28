@@ -61,7 +61,7 @@ def info():
         "-V",
         "--version",
         action="version",
-        version="%(prog)s {version}".format(version=__version__),
+        version=f"%(prog)s {__version__}",
     )
 
     args, _ = parser.parse_known_args()
@@ -290,13 +290,13 @@ def attribute_dataset(argv):
     if args.format == "text":
         authors = []
 
-        for i, dataset in enumerate(iter_datasets()):
+        for dataset in iter_datasets():
             for a in dataset.metadata["publication"]["authorships"]:
                 authors.append(a["author"]["display_name"])
     elif args.format == "markdown":
         authors = []
 
-        for i, dataset in enumerate(iter_datasets()):
+        for dataset in iter_datasets():
             for a in dataset.metadata["publication"]["authorships"]:
                 if "orcid" in a["author"] and a["author"]["orcid"]:
                     authors.append(
@@ -317,7 +317,7 @@ def attribute_dataset(argv):
     print("\nReferences to datasets:\n")
     prefix = "" if args.format == "text" else "> "
 
-    for i, dataset in enumerate(iter_datasets()):
+    for dataset in iter_datasets():
         print(
             f"{prefix}[{dataset.metadata['key']}]",
             dataset.cite,
@@ -329,7 +329,7 @@ def attribute_dataset(argv):
     )
 
     collections = []
-    for i, dataset in enumerate(iter_datasets()):
+    for dataset in iter_datasets():
         try:
             collections.append(dataset.cite_collection)
         except FileNotFoundError:
