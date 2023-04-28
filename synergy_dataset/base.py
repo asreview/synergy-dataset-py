@@ -234,5 +234,5 @@ class Dataset:
             df = pd.DataFrame.from_dict(self.to_dict(*args, **kwargs), orient="index")
             df.index.name = "openalex_id"
             return df
-        except NameError:
-            raise ImportError("Install pandas to export to pandas.DataFrame")
+        except NameError as err:
+            raise ImportError("Install pandas to export to pandas.DataFrame") from err

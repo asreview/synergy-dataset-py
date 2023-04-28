@@ -39,13 +39,7 @@ packages = ["synergy_dataset"]
 write_to = "synergy_dataset/_version.py"
 
 [tool.ruff]
-select = [
-  "E",   # pycodestyle
-  "F",   # pyflakes
-  "UP",  # pyupgrade
-  "I",  # isort
-  # "D",  # pydocstyle
-]
+select = ["E", "F", "UP", "I", "B"]
 
 [tool.ruff.pydocstyle]
 convention = "google"
