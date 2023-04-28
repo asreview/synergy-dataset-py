@@ -89,6 +89,7 @@ def iter_datasets():
 
 class Dataset:
     """Dataset object belonging to a systematic review."""
+
     def __init__(self, name):
         super().__init__()
         self.name = name
