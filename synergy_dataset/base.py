@@ -2,10 +2,10 @@ import csv
 import glob
 import json
 import os
+import zipfile
 from io import BytesIO
 from pathlib import Path
 from urllib.request import urlopen
-from zipfile import ZipFile
 
 try:
     import pandas as pd
@@ -32,13 +32,16 @@ def _get_path_raw_dataset(version=SYNERGY_VERSION):
         return Path(SYNERGY_ROOT, f"synergy-dataset-{version}")
 
 
-def _get_download_url(version=None, source="github"):
+def _get_download_url(version=None, source="dataverse"):
     if version is None:
         version = SYNERGY_VERSION
 
-    if source == "github":
-        github_url = "https://github.com/asreview/synergy-dataset/archive/refs/tags/v{}.zip"  # noqa
-        return github_url.format(version)
+    if source == "dataverse":
+        url = "https://dataverse.nl/api/access/dataset/:persistentId/versions/{}?persistentId=doi:10.34894/HE6NAQ"  # noqa
+        return url.format(version)
+    elif source == "github":
+        url = "https://github.com/asreview/synergy-dataset/archive/refs/tags/v{}.zip"  # noqa
+        return url.format(version)
     else:
         raise ValueError("Unknown source")
 
@@ -52,7 +55,7 @@ def _dataset_available():
     return _get_path_raw_dataset().exists()
 
 
-def download_raw_dataset(url=None, path=SYNERGY_ROOT):
+def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="dataverse"):
     """Download the raw dataset from the SYNERGY repository.
 
     Args:
@@ -60,15 +63,22 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT):
         Defaults to latest github release.
         path (str, optional): Path to download the dataset to.
         Defaults to ~/.synergy_dataset_source.
-
+        version (str, optional): The version of the dataset to download.
+        source (str, optional): The source to download (github, dataverse).
+        Default dataverse.
     """
     if url is None:
-        url = _get_download_url()
+        url = _get_download_url(version=version, source=source)
 
     print(f"Downloading version {SYNERGY_VERSION} of the SYNERGY dataset...")
 
-    release_zip = ZipFile(BytesIO(urlopen(url).read()))
+    release_zip = zipfile.ZipFile(BytesIO(urlopen(url).read()))
     release_zip.extractall(path=path)
+
+    # hack because the version on dataverse has a v prefix
+    for f in Path(path).iterdir():
+        if f.is_dir() and f.name.startswith("synergy-dataset-v"):
+            os.rename(f, str(f).replace("synergy-dataset-v", "synergy-dataset-"))
 
 
 def iter_datasets():
@@ -173,7 +183,7 @@ class Dataset:
         p_zipped_works = str(Path(_get_path_raw_dataset(), self.name, "works_*.zip"))
 
         for f_work in glob.glob(p_zipped_works):
-            with ZipFile(f_work, "r") as z:
+            with zipfile.ZipFile(f_work, "r") as z:
                 for work_set in z.namelist():
                     with z.open(work_set) as f:
                         d = json.loads(f.read())
