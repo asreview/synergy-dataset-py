@@ -37,11 +37,9 @@ def _get_download_url(version=None, source="dataverse"):
         version = SYNERGY_VERSION
 
     if source == "dataverse":
-        url = "https://dataverse.nl/api/access/dataset/:persistentId/versions/{}?persistentId=doi:10.34894/HE6NAQ"  # noqa
-        return url.format(version)
+        return f"https://dataverse.nl/api/access/dataset/:persistentId/versions/{version}?persistentId=doi:10.34894/HE6NAQ"  # noqa
     elif source == "github":
-        url = "https://github.com/asreview/synergy-dataset/archive/refs/tags/v{}.zip"  # noqa
-        return url.format(version)
+        return f"https://github.com/asreview/synergy-dataset/archive/refs/tags/v{version}.zip"  # noqa
     else:
         raise ValueError("Unknown source")
 
