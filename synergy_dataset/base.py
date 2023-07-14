@@ -7,6 +7,8 @@ from io import BytesIO
 from pathlib import Path
 from urllib.request import urlopen
 
+import requests
+
 try:
     import pandas as pd
 except ImportError:
@@ -23,12 +25,13 @@ SYNERGY_PATH = os.getenv("SYNERGY_PATH")
 SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
 
 
-def _get_path_raw_dataset(version=SYNERGY_VERSION):
+def _get_path_raw_dataset(version=None):
     if SYNERGY_PATH and SYNERGY_PATH == "development":
         return Path(__file__).parent.parent.parent / "synergy-release"
     elif SYNERGY_PATH:
         return Path(SYNERGY_PATH).expanduser()
     else:
+        version = SYNERGY_VERSION if version is None else version
         return Path(SYNERGY_ROOT, f"synergy-dataset-{version}")
 
 
@@ -44,13 +47,16 @@ def _get_download_url(version=None, source="dataverse"):
         raise ValueError("Unknown source")
 
 
-def _dataset_available():
+def _dataset_available(version=SYNERGY_VERSION):
     """Check if the dataset is available.
+
+    Args:
+        version (str, optional): The version of the dataset to download.
 
     Returns:
         bool: True if the dataset is available
     """
-    return _get_path_raw_dataset().exists()
+    return _get_path_raw_dataset(version=version).exists()
 
 
 def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="dataverse"):
@@ -79,17 +85,58 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
             os.rename(f, str(f).replace("synergy-dataset-v", "synergy-dataset-"))
 
 
-def iter_datasets():
+def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
+    """Download the raw dataset from the SYNERGY repository.
+
+    Args:
+        url (str, optional): URL to the SYNERGY dataset.
+        Defaults to latest github release.
+        path (str, optional): Path to download the dataset to.
+        Defaults to ~/.synergy_dataset_source.
+        version (str, optional): The version of the dataset to download.
+        source (str, optional): The source to download (github, dataverse).
+        Default dataverse.
+    """
+
+    version = SYNERGY_VERSION if version is None else version
+    url_list = f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}?persistentId=doi:10.34894/HE6NAQ"  # noqa
+
+    r = requests.get(url_list)
+    file_list = r.json()["data"]["files"]
+
+    files_subset = filter(
+        lambda x: x["directoryLabel"] == f"synergy-dataset-v1.0/{name}", file_list
+    )
+    ids = ",".join(str(x["dataFile"]["id"]) for x in files_subset)
+
+    url_download = f"https://dataverse.nl/api/access/datafiles/{ids}"
+    download_raw_dataset(url=url_download, path=path)
+
+
+def iter_datasets(path=None, version=None):
     """Iterate over the available datasets.
+
+    Args:
+        path (str, optional): Path to download the dataset to.
+        Defaults to ~/.synergy_dataset_source.
+        version (str, optional): The version of the dataset to download.
 
     Yields:
         Dataset: Dataset object
     """
-    if not _dataset_available():
-        download_raw_dataset()
+    version = SYNERGY_VERSION if version is None else version
+
+    if path is None and not _dataset_available():
+        download_raw_dataset(version=version)
+        path = _get_path_raw_dataset(version=version)
+    elif path is None and _dataset_available():
+        path = _get_path_raw_dataset(version=version)
+    else:
+        version = SYNERGY_VERSION if version is None else version
+        path = Path(path, f"synergy-dataset-{version}")
 
     for dataset in sorted(
-        glob.glob(str(Path(_get_path_raw_dataset(), "*", "metadata.json"))),
+        glob.glob(str(Path(path, "*", "metadata.json"))),
         key=lambda x: x.lower(),
     ):
         yield Dataset(Path(dataset).parts[-2])
