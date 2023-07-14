@@ -25,12 +25,13 @@ SYNERGY_PATH = os.getenv("SYNERGY_PATH")
 SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
 
 
-def _get_path_raw_dataset(version=SYNERGY_VERSION):
+def _get_path_raw_dataset(version=None):
     if SYNERGY_PATH and SYNERGY_PATH == "development":
         return Path(__file__).parent.parent.parent / "synergy-release"
     elif SYNERGY_PATH:
         return Path(SYNERGY_PATH).expanduser()
     else:
+        version = SYNERGY_VERSION if version is None else version
         return Path(SYNERGY_ROOT, f"synergy-dataset-{version}")
 
 
@@ -48,13 +49,13 @@ def _get_download_url(version=None, source="dataverse"):
         raise ValueError("Unknown source")
 
 
-def _dataset_available():
+def _dataset_available(version=SYNERGY_VERSION):
     """Check if the dataset is available.
 
     Returns:
         bool: True if the dataset is available
     """
-    return _get_path_raw_dataset().exists()
+    return _get_path_raw_dataset(version=version).exists()
 
 
 def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="dataverse"):
@@ -117,8 +118,12 @@ def iter_datasets(path=None, version=None):
     Yields:
         Dataset: Dataset object
     """
+    version = SYNERGY_VERSION if version is None else version
+
     if path is None and not _dataset_available():
         download_raw_dataset(version=version)
+        path = _get_path_raw_dataset(version=version)
+    elif path is None and _dataset_available():
         path = _get_path_raw_dataset(version=version)
     else:
         version = SYNERGY_VERSION if version is None else version
