@@ -52,6 +52,9 @@ def _get_download_url(version=None, source="dataverse"):
 def _dataset_available(version=SYNERGY_VERSION):
     """Check if the dataset is available.
 
+    Args:
+        version (str, optional): The version of the dataset to download.
+
     Returns:
         bool: True if the dataset is available
     """
@@ -114,6 +117,11 @@ def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
 
 def iter_datasets(path=None, version=None):
     """Iterate over the available datasets.
+
+    Args:
+        path (str, optional): Path to download the dataset to.
+        Defaults to ~/.synergy_dataset_source.
+        version (str, optional): The version of the dataset to download.
 
     Yields:
         Dataset: Dataset object
