@@ -139,22 +139,26 @@ def iter_datasets(path=None, version=None):
         glob.glob(str(Path(path, "*", "metadata.json"))),
         key=lambda x: x.lower(),
     ):
-        yield Dataset(Path(dataset).parts[-2])
+        yield Dataset(Path(dataset).parts[-2], path=Path(dataset).parent)
 
 
 class Dataset:
     """Dataset object belonging to a systematic review."""
 
-    def __init__(self, name):
+    def __init__(self, name, path=None):
         super().__init__()
         self.name = name
+        self.path = path
+
+        # create a path if not present
+        self._path = path if path else Path(_get_path_raw_dataset(), self.name)
 
     @property
     def cite(self):
         """Citation for the publication."""
         if not hasattr(self, "_cite"):
             with open(
-                Path(_get_path_raw_dataset(), self.name, "CITATION.txt"),
+                Path(self._path, "CITATION.txt"),
                 encoding="utf-8",
             ) as f:
                 self._cite = f.read()
@@ -166,7 +170,7 @@ class Dataset:
         """Citation for the collection."""
         if not hasattr(self, "_cite_collection"):
             with open(
-                Path(_get_path_raw_dataset(), self.name, "CITATION_collection.txt"),
+                Path(self._path, "CITATION_collection.txt"),
                 encoding="utf-8",
             ) as f:
                 self._cite_collection = f.read()
@@ -178,21 +182,19 @@ class Dataset:
         """Metadata for the dataset."""
         if not hasattr(self, "_metadata"):
             with open(
-                Path(_get_path_raw_dataset(), self.name, "metadata.json"),
+                Path(self._path, "metadata.json"),
                 encoding="utf-8",
             ) as f:
                 self._metadata = json.load(f)
             with open(
-                Path(_get_path_raw_dataset(), self.name, "metadata_publication.json"),
+                Path(self._path, "metadata_publication.json"),
                 encoding="utf-8",
             ) as f:
                 self._metadata["publication"] = json.load(f)
 
             try:
                 with open(
-                    Path(
-                        _get_path_raw_dataset(), self.name, "metadata_collection.json"
-                    ),
+                    Path(self._path, "metadata_collection.json"),
                     encoding="utf-8",
                 ) as f:
                     self._metadata["collection"] = json.load(f)
@@ -207,7 +209,7 @@ class Dataset:
         if not hasattr(self, "_labels"):
             self._labels = {}
             with open(
-                Path(_get_path_raw_dataset(), self.name, "labels.csv"),
+                Path(self._path, "labels.csv"),
                 newline="",
                 encoding="utf-8",
             ) as idfile:
@@ -225,7 +227,7 @@ class Dataset:
         Yields:
             Work: pyalex.Work object, label
         """
-        p_zipped_works = str(Path(_get_path_raw_dataset(), self.name, "works_*.zip"))
+        p_zipped_works = str(Path(self._path, "works_*.zip"))
 
         for f_work in glob.glob(p_zipped_works):
             with zipfile.ZipFile(f_work, "r") as z:
