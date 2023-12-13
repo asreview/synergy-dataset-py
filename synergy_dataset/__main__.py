@@ -105,6 +105,9 @@ def build_dataset(argv):
 
     args, _ = parser.parse_known_args()
 
+    if "abstract" not in args.vars:
+        args.legal = True
+
     if not args.legal:
         user_input = input(f"{LEGAL_NOTE} ([Y]es,[N]o):\n")
         if user_input.lower() in ["n", "no"]:
@@ -141,7 +144,7 @@ def build_dataset(argv):
         if args.dataset is not None:
             for name in args.dataset:
                 d = Dataset(name)
-                result = d.to_frame()
+                result = d.to_frame(args.vars)
 
                 if args.output:
                     result.to_csv(Path(args.output, f"{name}.csv"), index=False)
