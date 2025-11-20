@@ -17,7 +17,7 @@ classifiers = [
 license = {text = "MIT"}
 dynamic = ["version"]
 requires-python = ">=3.7"
-dependencies = ["requests", "pyalex", "tabulate", "tqdm"]
+dependencies = ["requests", "requests_cache", "pyalex", "tabulate", "tqdm"]
 
 [project.optional-dependencies]
 lint = ["flake8", "flake8-import-order"]
