@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 import requests
+import requests_cache
 
 try:
     import pandas as pd
@@ -23,6 +24,9 @@ SYNERGY_VERSION = (
 )
 SYNERGY_PATH = os.getenv("SYNERGY_PATH")
 SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
+
+# Initialize requests-cache with a 24-hour expiration
+requests_cache.install_cache("synergy_cache", expire_after=24 * 60 * 60)
 
 
 def _get_path_raw_dataset(version=None):
