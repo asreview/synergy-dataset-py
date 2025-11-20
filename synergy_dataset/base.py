@@ -5,7 +5,6 @@ import os
 import zipfile
 from io import BytesIO
 from pathlib import Path
-from urllib.request import urlopen
 
 import requests
 import requests_cache
@@ -80,7 +79,10 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
 
     print(f"Downloading version {SYNERGY_VERSION} of the SYNERGY dataset...")
 
-    release_zip = zipfile.ZipFile(BytesIO(urlopen(url).read()))
+    response = requests.get(url)
+    response.raise_for_status()
+
+    release_zip = zipfile.ZipFile(BytesIO(response.content))
     release_zip.extractall(path=path)
 
     # hack because the version on dataverse has a v prefix
