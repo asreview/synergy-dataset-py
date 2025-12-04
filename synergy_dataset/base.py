@@ -5,9 +5,9 @@ import os
 import zipfile
 from io import BytesIO
 from pathlib import Path
-from urllib.request import urlopen
 
 import requests
+import requests_cache
 
 try:
     import pandas as pd
@@ -23,6 +23,9 @@ SYNERGY_VERSION = (
 )
 SYNERGY_PATH = os.getenv("SYNERGY_PATH")
 SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
+
+# Initialize requests-cache with a 24-hour expiration
+requests_cache.install_cache("synergy_cache", expire_after=24 * 60 * 60)
 
 
 def _get_path_raw_dataset(version=None):
@@ -76,7 +79,10 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
 
     print(f"Downloading version {SYNERGY_VERSION} of the SYNERGY dataset...")
 
-    release_zip = zipfile.ZipFile(BytesIO(urlopen(url).read()))
+    response = requests.get(url)
+    response.raise_for_status()
+
+    release_zip = zipfile.ZipFile(BytesIO(response.content))
     release_zip.extractall(path=path)
 
     # hack because the version on dataverse has a v prefix
