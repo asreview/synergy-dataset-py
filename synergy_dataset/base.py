@@ -3,6 +3,7 @@ import glob
 import json
 import os
 import zipfile
+from collections import Counter
 from io import BytesIO
 from pathlib import Path
 
@@ -16,7 +17,8 @@ except ImportError:
 
 from pyalex import Work
 
-WORK_MAPPING = ["doi", "title", "abstract"]
+from synergy_dataset.extractors import DEFAULT_VARS
+from synergy_dataset.extractors import WORK_EXTRACTORS
 
 SYNERGY_VERSION = (
     os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "1.0"
@@ -211,7 +213,19 @@ class Dataset:
 
     @property
     def labels(self):
-        """Metadata on the corresponding publication as work."""
+        """Labels and identifiers for all works in the dataset.
+
+        Returns:
+            dict: Mapping of ``openalex_id`` to a dict with keys:
+
+                - ``doi`` (str or None)
+                - ``pmid`` (str or None)
+                - ``lens_id`` (str or None)
+                - ``label_included`` (int): 1 if included, 0 if excluded.
+                - ``label_abstract_included`` (int or None): Abstract
+                  screening label if the column exists in labels.csv,
+                  otherwise None.
+        """
         if not hasattr(self, "_labels"):
             self._labels = {}
             with open(
@@ -220,82 +234,206 @@ class Dataset:
                 encoding="utf-8",
             ) as idfile:
                 reader = csv.DictReader(idfile)
+                fieldnames = reader.fieldnames or []
+                has_abstract_label = "label_abstract_included" in fieldnames
                 for row in reader:
-                    self._labels[row["openalex_id"]] = int(row["label_included"])
-
-            return self._labels
+                    self._labels[row["openalex_id"].lower()] = {
+                        "doi": row.get("doi") or None,
+                        "pmid": row.get("pmid") or None,
+                        "lens_id": row.get("lens_id") or None,
+                        "label_included": int(row["label_included"]),
+                        "label_abstract_included": (
+                            int(row["label_abstract_included"])
+                            if has_abstract_label
+                            and row.get("label_abstract_included", "") != ""
+                            else None
+                        ),
+                    }
 
         return self._labels
 
-    def iter(self):
+    def iter(
+        self,
+        included_only=False,
+        excluded_only=False,
+        years=None,
+        validate=True,
+    ):
         """Iterate over the works in the dataset.
 
+        Args:
+            included_only (bool): If True, yield only included works
+                (label_included == 1). Default False.
+            excluded_only (bool): If True, yield only excluded works
+                (label_included == 0). Default False.
+            years (tuple, optional): A (start, end) tuple to filter works
+                by publication year (inclusive). Default None (no filter).
+            validate (bool): If True (default), validate each work against
+                the OpenAlex schema using Pydantic. Set to False to skip
+                validation for performance-sensitive pipelines. Requires
+                ``pydantic`` (``pip install synergy-dataset[validation]``).
+
         Yields:
-            Work: pyalex.Work object, label
+            tuple: (work, label_included) where work is a WorkModel
+                (validate=True) or pyalex.Work (validate=False), and
+                label_included is an int (0 or 1).
         """
+        if validate:
+            from synergy_dataset.models import WorkModel
+
         p_zipped_works = str(Path(self._path, "works_*.zip"))
 
         for f_work in glob.glob(p_zipped_works):
             with zipfile.ZipFile(f_work, "r") as z:
                 for work_set in z.namelist():
                     with z.open(work_set) as f:
-                        d = json.loads(f.read())
+                        works = json.loads(f.read())
 
-                        for di in d:
-                            yield Work(di), self.labels[di["id"]]
+                        for w in works:
+                            label_info = self.labels[w["id"].lower()]
+                            label_included = label_info["label_included"]
 
-    def to_dict(self, variables=WORK_MAPPING):
+                            if included_only and label_included != 1:
+                                continue
+                            if excluded_only and label_included != 0:
+                                continue
+
+                            if years is not None:
+                                pub_year = w.get("publication_year")
+                                if pub_year is None:
+                                    continue
+                                if not (years[0] <= pub_year <= years[1]):
+                                    continue
+
+                            work = WorkModel(**w) if validate else Work(w)
+                            yield work, label_included
+
+    def to_dict(self, vars=None):
         """Export the dataset to a dictionary.
 
+        The base record for each work always contains the fields from
+        ``labels.csv``: ``doi``, ``pmid``, ``lens_id``, ``label_included``,
+        and ``label_abstract_included`` (when available).
+
         Args:
-            variables (list, optional): List of variables to export.
-            Defaults to WORK_MAPPING.
+            vars (list, str, or None): Work-derived fields to include on top
+                of the base record.
+
+                - ``None`` (default): adds ``title`` and ``abstract``
+                  (reconstructed from the inverted index).
+                - A list of field names from ``WORK_EXTRACTORS``, e.g.
+                  ``["cited_by_count", "author_names"]``.
+                - ``"extended"``: includes every field in ``WORK_EXTRACTORS``.
+
+                Run ``list(WORK_EXTRACTORS)`` to see all available names.
 
         Returns:
-            dict: Dictionary of the dataset
+            dict: Mapping of ``openalex_id`` to record dict.
         """
-        records = {k: None for k, v in self.labels.items()}
-        for work, label_included in self.iter():
-            if isinstance(variables, dict):
-                record = {}
-                for key, value in variables.items():
-                    if isinstance(value, str):
-                        record[key] = work[value]
-                    else:
-                        record[key] = value(work)
-            elif isinstance(variables, list):
-                record = {}
-                for key in variables:
-                    record[key] = work[key]
-            else:
-                record = work
-
-            # remove newlines
-            if "title" in record and record["title"]:
-                record["title"] = record["title"].replace("\n", " ").replace("\r", "")
-            if "abstract" in record and record["abstract"]:
-                record["abstract"] = (
-                    record["abstract"].replace("\n", " ").replace("\r", "")
+        if vars is None:
+            active_vars = DEFAULT_VARS
+        elif vars == "extended":
+            active_vars = list(WORK_EXTRACTORS)
+        else:
+            unknown = [v for v in vars if v not in WORK_EXTRACTORS]
+            if unknown:
+                raise ValueError(
+                    f"Unknown vars: {unknown!r}. Available: {list(WORK_EXTRACTORS)}"
                 )
+            active_vars = list(dict.fromkeys(DEFAULT_VARS + list(vars)))
 
-            record["label_included"] = label_included
-            records[work["id"]] = record
+        # Pre-build records from labels so every openalex_id is represented
+        # even if the corresponding work JSON is missing. Column order follows
+        # the user-visible default: ids → work fields → label columns.
+        records = {}
+        for openalex_id, label_info in self.labels.items():
+            record = {
+                "doi": label_info["doi"],
+                "pmid": label_info["pmid"],
+                "lens_id": label_info["lens_id"],
+            }
+            for field in active_vars:
+                record[field] = None
+            record["label_included"] = label_info["label_included"]
+            if label_info["label_abstract_included"] is not None:
+                record["label_abstract_included"] = label_info[
+                    "label_abstract_included"
+                ]
+            records[openalex_id] = record
+
+        extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
+        for work, _ in self.iter():
+            work_id = work.id.lower()
+            for field, extractor in extractors.items():
+                records[work_id][field] = extractor(work)
 
         return records
 
-    def to_frame(self, *args, **kwargs):
-        """Export the dataset to a pandas.DataFrame.
+    def to_frame(self, vars=None):
+        """Export the dataset to a pandas DataFrame.
 
         Args:
-            variables (list, optional): List of variables to export.
-            Defaults to WORK_MAPPING.
+            vars (list, str, or None): Passed directly to ``to_dict()``.
+                See ``to_dict()`` for details.
 
         Returns:
-            pandas.DataFrame: DataFrame of the dataset
+            pandas.DataFrame: DataFrame indexed by ``openalex_id``.
         """
         try:
-            df = pd.DataFrame.from_dict(self.to_dict(*args, **kwargs), orient="index")
+            df = pd.DataFrame.from_dict(self.to_dict(vars=vars), orient="index")
             df.index.name = "openalex_id"
-            return df
+            return df.reset_index()
         except NameError as err:
             raise ImportError("Install pandas to export to pandas.DataFrame") from err
+
+    def summary(self):
+        """Return summary statistics for the dataset.
+
+        Returns:
+            dict: A dictionary with the following keys:
+
+                - ``name`` (str): Dataset name.
+                - ``n_total`` (int): Total number of works.
+                - ``n_included`` (int): Number of included works.
+                - ``n_excluded`` (int): Number of excluded works.
+                - ``inclusion_rate`` (float): Fraction of included works.
+                - ``year_range`` (tuple or None): (min_year, max_year) of
+                  publication years, or None if no years are available.
+                - ``languages`` (Counter): Language code -> count.
+                - ``primary_topics`` (list): Top 5 primary topic names.
+        """
+        n_included = sum(1 for v in self.labels.values() if v["label_included"] == 1)
+        n_total = len(self.labels)
+        n_excluded = n_total - n_included
+        inclusion_rate = n_included / n_total if n_total > 0 else 0.0
+
+        years = []
+        languages = Counter()
+        topic_counter = Counter()
+
+        for work, _ in self.iter(validate=False):
+            year = work["publication_year"]
+            if year is not None:
+                years.append(year)
+
+            lang = work.get("language")
+            if lang:
+                languages[lang] += 1
+
+            primary_topic = work.get("primary_topic")
+            if primary_topic and primary_topic.get("display_name"):
+                topic_counter[primary_topic["display_name"]] += 1
+
+        year_range = (min(years), max(years)) if years else None
+        primary_topics = [name for name, _ in topic_counter.most_common(5)]
+
+        return {
+            "name": self.name,
+            "n_total": n_total,
+            "n_included": n_included,
+            "n_excluded": n_excluded,
+            "inclusion_rate": inclusion_rate,
+            "year_range": year_range,
+            "languages": languages,
+            "primary_topics": primary_topics,
+        }

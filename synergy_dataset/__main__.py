@@ -7,12 +7,12 @@ from tabulate import tabulate
 from tqdm import tqdm
 
 from synergy_dataset._version import __version__
-from synergy_dataset.base import WORK_MAPPING
 from synergy_dataset.base import Dataset
 from synergy_dataset.base import _dataset_available
 from synergy_dataset.base import _get_path_raw_dataset
 from synergy_dataset.base import download_raw_dataset
 from synergy_dataset.base import iter_datasets
+from synergy_dataset.extractors import WORK_EXTRACTORS
 
 LEGAL_NOTE = """
 Due to legal constraints, paper abstracts in SYNERGY cannot be published in
@@ -83,10 +83,16 @@ def build_dataset(argv):
     parser.add_argument(
         "-v",
         "--vars",
-        default=",".join(WORK_MAPPING),
-        type=lambda x: x.split(","),
+        type=lambda x: x if x == "extended" else x.split(","),
         help="The variables to include. "
-        "Default '{}'.".format(",".join(WORK_MAPPING)),
+        'Always included: "openalex_id", "doi", "pmid", "lens_id", "title",'
+        ' "abstract", "label_included", and "label_abstract_included"'
+        '\n"extended": Include each OpenAlex field.'
+        "\nThe following additional variables are available: {}".format(
+            ", ".join(
+                k for k in WORK_EXTRACTORS.keys() if k not in ("title", "abstract")
+            )
+        ),
     )
     parser.add_argument(
         "-d",
@@ -216,7 +222,7 @@ def list_datasets(argv):
     )
 
     try:
-        perc = f"{n_incl/n*100:.2f}"
+        perc = f"{n_incl / n * 100:.2f}"
     except ZeroDivisionError:
         perc = "NA"
 
