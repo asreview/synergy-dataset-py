@@ -24,6 +24,7 @@ SYNERGY_VERSION = (
     os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "1.0"
 )
 SYNERGY_PATH = os.getenv("SYNERGY_PATH")
+SYNERGY_SET = os.getenv("SYNERGY_SET", "synergy+")
 SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
 
 # Initialize requests-cache with a 24-hour expiration
@@ -37,19 +38,31 @@ def _get_path_raw_dataset(version=None):
         return Path(SYNERGY_PATH).expanduser()
     else:
         version = SYNERGY_VERSION if version is None else version
-        return Path(SYNERGY_ROOT, f"synergy-dataset-{version}")
+        if SYNERGY_SET == "synergy+":
+            return Path(SYNERGY_ROOT, f"synergy-plus-dataset-{version}")
+        else:
+            return Path(SYNERGY_ROOT, f"synergy-dataset-{version}")
 
 
 def _get_download_url(version=None, source="dataverse"):
     if version is None:
         version = SYNERGY_VERSION
 
-    if source == "dataverse":
-        return f"https://dataverse.nl/api/access/dataset/:persistentId/versions/{version}?persistentId=doi:10.34894/HE6NAQ"  # noqa
-    elif source == "github":
-        return f"https://github.com/asreview/synergy-dataset/archive/refs/tags/v{version}.zip"  # noqa
+    # TODO: Set the URL to the correct version once the DOI for synergy+ is registered on dataverse.
+    if SYNERGY_SET == "synergy+":
+        if source == "dataverse":
+            return f"https://dataverse.nl/api/access/dataset/:persistentId/versions/{version}?persistentId=doi:PLACEHOLDER_SYNERGY_PLUS"  # noqa
+        elif source == "github":
+            return f"https://github.com/asreview/synergy-dataset-plus/archive/refs/tags/v{version}.zip"  # noqa
+        else:
+            raise ValueError("Unknown source")
     else:
-        raise ValueError("Unknown source")
+        if source == "dataverse":
+            return f"https://dataverse.nl/api/access/dataset/:persistentId/versions/{version}?persistentId=doi:10.34894/HE6NAQ"  # noqa
+        elif source == "github":
+            return f"https://github.com/asreview/synergy-dataset/archive/refs/tags/v{version}.zip"  # noqa
+        else:
+            raise ValueError("Unknown source")
 
 
 def _dataset_available(version=SYNERGY_VERSION):
