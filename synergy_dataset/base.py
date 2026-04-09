@@ -48,7 +48,8 @@ def _get_download_url(version=None, source="dataverse"):
     if version is None:
         version = SYNERGY_VERSION
 
-    # TODO: Set the URL to the correct version once the DOI for synergy+ is registered on dataverse.
+    # TODO: Set the URL to the correct version once the DOI for 
+    # synergy+ is registered on dataverse.
     if SYNERGY_SET == "synergy+":
         if source == "dataverse":
             return f"https://dataverse.nl/api/access/dataset/:persistentId/versions/{version}?persistentId=doi:PLACEHOLDER_SYNERGY_PLUS"  # noqa
