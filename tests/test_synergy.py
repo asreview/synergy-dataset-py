@@ -250,10 +250,10 @@ def test_to_frame_returns_dataframe(vds):
     assert isinstance(df, pd.DataFrame)
 
 
-def test_to_frame_index_name(vds):
+def test_to_frame_has_openalex_id_column(vds):
     pytest.importorskip("pandas")
     df = vds.to_frame()
-    assert df.index.name == "openalex_id"
+    assert "openalex_id" in df.columns
 
 
 def test_to_frame_default_columns(vds):
@@ -436,3 +436,32 @@ def test_download_single_dataset(dataset_name, tmpdir):
 
     with pytest.raises(StopIteration):
         next(datasets)
+
+
+# ---------------------------------------------------------------------------
+# SYNERGY+ (xfail until DOI is registered on Dataverse)
+# ---------------------------------------------------------------------------
+
+_xfail_synergy_plus = pytest.mark.xfail(
+    reason="synergy+ DOI not yet registered on Dataverse",
+    strict=False,
+)
+
+
+@_xfail_synergy_plus
+def test_synergy_plus_iter_datasets_returns_multiple(synergy_plus):
+    assert len(list(iter_datasets())) > 1
+
+
+@_xfail_synergy_plus
+def test_synergy_plus_iter_datasets_yields_dataset_instances(synergy_plus):
+    for d in iter_datasets():
+        assert isinstance(d, Dataset)
+        break
+
+
+@_xfail_synergy_plus
+def test_synergy_plus_dataset_loads(synergy_plus):
+    d = next(iter_datasets())
+    assert isinstance(d.labels, dict)
+    assert len(d.labels) > 0
