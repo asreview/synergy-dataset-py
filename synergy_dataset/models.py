@@ -6,8 +6,6 @@ Validation is opt-out: Dataset.iter() validates by default
 and can be disabled with validate=False for performance-sensitive use.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 from pydantic import BaseModel
