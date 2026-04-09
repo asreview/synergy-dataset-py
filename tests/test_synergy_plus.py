@@ -1,12 +1,22 @@
+"""Tests for the synergy+ dataset.
+
+In synergy+, van_de_Schoot_2018 is republished as van_de_Schoot_2025.
+All tests are marked xfail until the synergy+ DOI is registered on Dataverse.
+"""
+
 import pytest
 
 from synergy_dataset import WORK_EXTRACTORS
 from synergy_dataset import Dataset
 from synergy_dataset import iter_datasets
 from synergy_dataset.base import download_raw_subset
-from synergy_dataset.extractors import _reconstruct_abstract
 
-DATASETS = ["Walker_2018", "van_de_Schoot_2018"]
+DATASETS = ["Walker_2018", "van_de_Schoot_2025"]
+
+pytestmark = pytest.mark.xfail(
+    reason="synergy+ DOI not yet registered on Dataverse",
+    strict=False,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -15,12 +25,12 @@ DATASETS = ["Walker_2018", "van_de_Schoot_2018"]
 
 
 @pytest.fixture(scope="module", autouse=True)
-def enable_synergy():
-    """Ensure the active dataset is 'synergy' for the entire module."""
+def enable_synergy_plus():
+    """Switch the active dataset to synergy+ for the entire module."""
     import synergy_dataset.base as _base
 
     original = _base.SYNERGY_SET
-    _base.SYNERGY_SET = "synergy"
+    _base.SYNERGY_SET = "synergy+"
     yield
     _base.SYNERGY_SET = original
 
@@ -32,8 +42,8 @@ def dataset(request):
 
 @pytest.fixture(scope="module")
 def vds():
-    """van_de_Schoot_2018 — used for single-dataset tests."""
-    return Dataset("van_de_Schoot_2018")
+    """van_de_Schoot_2025 — used for single-dataset tests."""
+    return Dataset("van_de_Schoot_2025")
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +192,6 @@ def test_to_dict_default_columns(vds):
 def test_to_dict_no_extra_columns_by_default(vds):
     record = next(iter(vds.to_dict().values()))
     expected = {"doi", "pmid", "lens_id", "title", "abstract", "label_included"}
-    # label_abstract_included is allowed as an optional addition
     assert set(record.keys()) - {"label_abstract_included"} == expected
 
 
@@ -359,59 +368,12 @@ def test_workmodel_from_real_work(vds):
     assert isinstance(work, WorkModel)
 
 
-def test_workmodel_extra_fields_allowed():
-    from synergy_dataset.models import WorkModel
-
-    w = WorkModel(id="https://openalex.org/W123", unknown_future_field="value")
-    assert w.id == "https://openalex.org/W123"
-
-
-def test_workmodel_synergy_fields():
-    from synergy_dataset.models import WorkModel
-
-    w = WorkModel(abstract_original="Plain text.", language_fasttext="en")
-    assert w.abstract_original == "Plain text."
-    assert w.language_fasttext == "en"
-
-
-def test_workmodel_all_optional(vds):
-    """An empty dict must not raise — all fields are Optional."""
-    from synergy_dataset.models import WorkModel
-
-    w = WorkModel()
-    assert w.id is None
-
-
-# ---------------------------------------------------------------------------
-# _reconstruct_abstract
-# ---------------------------------------------------------------------------
-
-
-def test_reconstruct_abstract_basic():
-    index = {"Hello": [0], "world": [1]}
-    assert _reconstruct_abstract(index) == "Hello world"
-
-
-def test_reconstruct_abstract_ordering():
-    index = {"second": [1], "first": [0], "third": [2]}
-    assert _reconstruct_abstract(index) == "first second third"
-
-
-def test_reconstruct_abstract_none():
-    assert _reconstruct_abstract(None) is None
-
-
-def test_reconstruct_abstract_empty():
-    assert _reconstruct_abstract({}) is None
-
-
 # ---------------------------------------------------------------------------
 # WORK_EXTRACTORS
 # ---------------------------------------------------------------------------
 
 
 def test_all_extractors_run_without_error(vds):
-    """Every registered extractor must not raise on a real work."""
     from synergy_dataset.models import WorkModel
 
     work, _ = next(vds.iter(validate=True))
@@ -424,7 +386,6 @@ def test_all_extractors_run_without_error(vds):
 
 
 def test_all_extractors_usable_as_vars(vds):
-    """Each extractor name must be accepted by to_dict without error."""
     for name in WORK_EXTRACTORS:
         vds.to_dict(vars=[name])
 
