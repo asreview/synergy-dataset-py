@@ -7,14 +7,9 @@ from collections import Counter
 from io import BytesIO
 from pathlib import Path
 
+import pandas as pd
 import requests
 import requests_cache
-
-try:
-    import pandas as pd
-except ImportError:
-    pass
-
 from pyalex import Work
 
 from synergy_dataset.extractors import DEFAULT_VARS
@@ -354,7 +349,7 @@ class Dataset:
                 raise ValueError(
                     f"Unknown vars: {unknown!r}. Available: {list(WORK_EXTRACTORS)}"
                 )
-            active_vars = list(dict.fromkeys(DEFAULT_VARS + list(vars)))
+            active_vars = list(vars)
 
         # Pre-build records from labels so every openalex_id is represented
         # even if the corresponding work JSON is missing. Column order follows
