@@ -189,9 +189,31 @@ def list_datasets(argv):
         n += dataset.metadata["data"]["n_records"]
         n_incl += dataset.metadata["data"]["n_records_included"]
 
-        concepts = dataset.metadata["data"]["concepts"]["included"]
-        n_topics = args.n_topics if args.n_topics != -1 else len(concepts)
-        concepts_str = ", ".join([x["display_name"] for x in concepts[0:n_topics]])
+        pub_meta = dataset.metadata["publication"]
+        if "topics" in pub_meta:
+            # Group fields by domain: "Medicine: Oncology Cardiology, ..."
+            domain_fields = {}
+            for t in pub_meta["topics"]:
+                domain = t.get("domain", {}).get("display_name", "Unknown")
+                field = t.get("field", {}).get("display_name")
+                if field and field not in domain_fields.get(domain, []):
+                    domain_fields.setdefault(domain, []).append(field)
+            n_domains = args.n_topics if args.n_topics != -1 else len(domain_fields)
+            parts = [
+                f"{d}: {' '.join(fs)}"
+                for d, fs in list(domain_fields.items())[:n_domains]
+            ]
+            concepts_str = "\n".join(parts) if parts else "(not available)"
+        elif "concepts" in pub_meta:
+            concepts = [
+                x["display_name"] for x in pub_meta["concepts"] if x["level"] == 0
+            ]
+            n_topics = args.n_topics if args.n_topics != -1 else len(concepts)
+            concepts_str = (
+                ", ".join(concepts[:n_topics]) if concepts else "(not available)"
+            )
+        else:
+            concepts_str = "(not available)"
         table_values.append(
             [
                 i + 1,
@@ -248,20 +270,42 @@ def show_dataset(argv):
 
     print(f"\n{d.cite}")
 
-    concepts = list(
-        filter(lambda x: x["level"] == 0, d.metadata["publication"]["concepts"])
-    )
-    concepts_str = ", ".join([x["display_name"] for x in concepts])
+    pub_meta = d.metadata["publication"]
 
-    print("Topics:")
-    print("\t(level=0):", concepts_str)
+    if "topics" in pub_meta:
+        # SYNERGY+: each topic has domain/field/subfield/display_name
+        topics_list = pub_meta["topics"]
+        domains = list(
+            dict.fromkeys(
+                t["domain"]["display_name"] for t in topics_list if "domain" in t
+            )
+        )
+        fields = list(
+            dict.fromkeys(
+                t["field"]["display_name"] for t in topics_list if "field" in t
+            )
+        )
+        subfields = list(
+            dict.fromkeys(
+                t["subfield"]["display_name"] for t in topics_list if "subfield" in t
+            )
+        )
+        topics = list(dict.fromkeys(t["display_name"] for t in topics_list))
+        print("Topics:")
+        print("\t domain:  ", ", ".join(domains))
+        print("\t field:   ", ", ".join(fields))
+        print("\t subfield:", ", ".join(subfields))
+        print("\t topic:   ", ", ".join(topics), "\n")
 
-    concepts = list(
-        filter(lambda x: x["level"] != 0, d.metadata["publication"]["concepts"])
-    )
-    concepts_str = ", ".join([x["display_name"] for x in concepts])
-
-    print("\t(level=1+):", concepts_str, "\n")
+    elif "concepts" in pub_meta:
+        # Legacy SYNERGY: level=0 are primary topics, level!=0 are subtopics
+        top = [x["display_name"] for x in pub_meta["concepts"] if x["level"] == 0]
+        sub = [x["display_name"] for x in pub_meta["concepts"] if x["level"] != 0]
+        print("Topics (concepts):")
+        print("\t(level=0):", ", ".join(top))
+        print("\t(level=1+):", ", ".join(sub), "\n")
+    else:
+        print("Topics: (not available)\n")
 
     print("Data for this publication can be found at:")
     if "doi" in d.metadata["data"]:
