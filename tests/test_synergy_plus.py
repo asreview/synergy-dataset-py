@@ -61,6 +61,37 @@ def test_iter_datasets_yields_dataset_instances():
         break
 
 
+def test_iter_datasets_split_invalid_raises():
+    with pytest.raises(ValueError, match="split must be"):
+        next(iter_datasets(split="val"))
+
+
+def test_iter_datasets_split_fold_invalid_raises():
+    with pytest.raises(ValueError, match="fold must be"):
+        next(iter_datasets(split="test", fold=99))
+
+
+def test_iter_datasets_train_test_are_disjoint():
+    from synergy_dataset.splits import SPLITS
+
+    if not any(SPLITS):
+        pytest.skip("SPLITS not yet populated")
+    train = {d.name for d in iter_datasets(split="train")}
+    test = {d.name for d in iter_datasets(split="test")}
+    assert train.isdisjoint(test)
+
+
+def test_iter_datasets_train_test_cover_all():
+    from synergy_dataset.splits import SPLITS
+
+    if not any(SPLITS):
+        pytest.skip("SPLITS not yet populated")
+    all_names = {d.name for d in iter_datasets()}
+    train = {d.name for d in iter_datasets(split="train")}
+    test = {d.name for d in iter_datasets(split="test")}
+    assert train | test == all_names
+
+
 # ---------------------------------------------------------------------------
 # labels
 # ---------------------------------------------------------------------------
@@ -131,42 +162,6 @@ def test_iter_count_matches_labels(dataset):
     n_iter = sum(1 for _ in dataset.iter())
     assert n_iter == len(dataset.labels)
 
-
-def test_iter_included_only(dataset):
-    n_included_label = sum(
-        1 for v in dataset.labels.values() if v["label_included"] == 1
-    )
-    n_included_iter = sum(1 for _ in dataset.iter(included_only=True))
-    assert n_included_iter == n_included_label
-
-
-def test_iter_excluded_only(dataset):
-    n_excluded_label = sum(
-        1 for v in dataset.labels.values() if v["label_included"] == 0
-    )
-    n_excluded_iter = sum(1 for _ in dataset.iter(excluded_only=True))
-    assert n_excluded_iter == n_excluded_label
-
-
-def test_iter_included_and_excluded_are_complementary(dataset):
-    total = sum(1 for _ in dataset.iter())
-    n_inc = sum(1 for _ in dataset.iter(included_only=True))
-    n_exc = sum(1 for _ in dataset.iter(excluded_only=True))
-    assert n_inc + n_exc == total
-
-
-def test_iter_years_filter(vds):
-    year_start, year_end = 2000, 2010
-    for work, _ in vds.iter(years=(year_start, year_end), validate=False):
-        year = work["publication_year"]
-        assert year is not None
-        assert year_start <= year <= year_end
-
-
-def test_iter_years_filter_reduces_count(vds):
-    total = sum(1 for _ in vds.iter())
-    filtered = sum(1 for _ in vds.iter(years=(2010, 2015)))
-    assert filtered < total
 
 
 # ---------------------------------------------------------------------------

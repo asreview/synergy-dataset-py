@@ -130,17 +130,43 @@ def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
     download_raw_dataset(url=url_download, path=path)
 
 
-def iter_datasets(path=None, version=None):
+def iter_datasets(path=None, version=None, split=None, fold=1):
     """Iterate over the available datasets.
 
     Args:
         path (str, optional): Path to download the dataset to.
-        Defaults to ~/.synergy_dataset_source.
+            Defaults to ~/.synergy_dataset_source.
         version (str, optional): The version of the dataset to download.
+        split (str, optional): If provided, yield only datasets belonging to
+            the given split. One of ``"train"`` or ``"test"``. When omitted,
+            all datasets are yielded. Uses ``fold=1`` (the official split) by
+            default.
+        fold (int): Which fold to use for the split (1-indexed). Fold 1 is
+            the official train/test split. Only relevant when ``split`` is set.
+            Default is 1.
 
     Yields:
         Dataset: Dataset object
     """
+    from synergy_dataset.splits import SPLITS
+
+    if split is not None:
+        if SYNERGY_SET != "synergy+":
+            raise ValueError(
+                "Train/test splits are only available for SYNERGY+. "
+                "Set the SYNERGY_SET environment variable to 'synergy+' "
+                "or omit the split argument."
+            )
+        if split not in ("train", "test"):
+            raise ValueError(f"split must be 'train' or 'test', got {split!r}")
+        if not 1 <= fold <= len(SPLITS):
+            raise ValueError(f"fold must be between 1 and {len(SPLITS)}, got {fold}")
+        test_names = set(SPLITS[fold - 1])
+        if split == "test":
+            allowed = test_names
+        else:
+            allowed = {name for fold_names in SPLITS for name in fold_names} - test_names
+
     version = SYNERGY_VERSION if version is None else version
 
     if path is None and not _dataset_available():
@@ -156,7 +182,10 @@ def iter_datasets(path=None, version=None):
         glob.glob(str(Path(path, "*", "metadata.json"))),
         key=lambda x: x.lower(),
     ):
-        yield Dataset(Path(dataset).parts[-2], path=Path(dataset).parent)
+        name = Path(dataset).parts[-2]
+        if split is not None and name not in allowed:
+            continue
+        yield Dataset(name, path=Path(dataset).parent)
 
 
 class Dataset:
@@ -261,22 +290,10 @@ class Dataset:
 
         return self._labels
 
-    def iter(
-        self,
-        included_only=False,
-        excluded_only=False,
-        years=None,
-        validate=True,
-    ):
+    def iter(self, validate=True):
         """Iterate over the works in the dataset.
 
         Args:
-            included_only (bool): If True, yield only included works
-                (label_included == 1). Default False.
-            excluded_only (bool): If True, yield only excluded works
-                (label_included == 0). Default False.
-            years (tuple, optional): A (start, end) tuple to filter works
-                by publication year (inclusive). Default None (no filter).
             validate (bool): If True (default), validate each work against
                 the OpenAlex schema using Pydantic. Set to False to skip
                 validation for performance-sensitive pipelines. Requires
@@ -301,18 +318,6 @@ class Dataset:
                         for w in works:
                             label_info = self.labels[w["id"].lower()]
                             label_included = label_info["label_included"]
-
-                            if included_only and label_included != 1:
-                                continue
-                            if excluded_only and label_included != 0:
-                                continue
-
-                            if years is not None:
-                                pub_year = w.get("publication_year")
-                                if pub_year is None:
-                                    continue
-                                if not (years[0] <= pub_year <= years[1]):
-                                    continue
 
                             work = WorkModel(**w) if validate else Work(w)
                             yield work, label_included
