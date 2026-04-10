@@ -43,7 +43,7 @@ def _get_download_url(version=None, source="dataverse"):
     if version is None:
         version = SYNERGY_VERSION
 
-    # TODO: Set the URL to the correct version once the DOI for 
+    # TODO: Set the URL to the correct version once the DOI for
     # synergy+ is registered on dataverse.
     if SYNERGY_SET == "synergy+":
         if source == "dataverse":
@@ -165,7 +165,9 @@ def iter_datasets(path=None, version=None, split=None, fold=1):
         if split == "test":
             allowed = test_names
         else:
-            allowed = {name for fold_names in SPLITS for name in fold_names} - test_names
+            allowed = {
+                name for fold_names in SPLITS for name in fold_names
+            } - test_names
 
     version = SYNERGY_VERSION if version is None else version
 
