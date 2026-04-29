@@ -76,17 +76,22 @@ def _count_filtered_inclusions(dataset, filter_kwargs):
     return sum(label for _, label in dataset.iter(validate=False, **filter_kwargs))
 
 
-def _write_review_metadata(datasets, active_vars, filter_kwargs, min_inclusions, output_path):
+def _write_review_metadata(
+    datasets, active_vars, filter_kwargs, min_inclusions, output_path
+):
     """Write review_metadata.csv combining metadata.json and metadata_publication.json.
 
     Counts n_records and n_records_included by iterating with the active filters
     so the numbers reflect the same subset that was exported per dataset.
     """
     extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
-    fieldnames = (
-        ["key", "data_doi", "n_records", "n_records_included", "eligibility_criteria"]
-        + list(extractors)
-    )
+    fieldnames = [
+        "key",
+        "data_doi",
+        "n_records",
+        "n_records_included",
+        "eligibility_criteria",
+    ] + list(extractors)
 
     out = output_path / "review_metadata.csv"
     with open(out, "w", newline="", encoding="utf-8") as f:
@@ -251,7 +256,10 @@ def build_dataset(argv):
         else:
             datasets = list(iter_datasets())
             for dataset in tqdm(datasets):
-                if _count_filtered_inclusions(dataset, filter_kwargs) < args.min_inclusions:
+                if (
+                    _count_filtered_inclusions(dataset, filter_kwargs)
+                    < args.min_inclusions
+                ):
                     continue
                 dataset.to_frame(args.vars, **filter_kwargs).to_csv(
                     Path(args.output, f"{dataset.name}.csv"), index=False
