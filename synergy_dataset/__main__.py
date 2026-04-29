@@ -194,7 +194,8 @@ def build_dataset(argv):
         dest="min_inclusions",
         type=int,
         default=2,
-        help="Minimum number of included records required to output a dataset (default: 2).",
+        help="Minimum number of included records required to output a dataset "
+        "(default: 2).",
     )
 
     args, _ = parser.parse_known_args()
