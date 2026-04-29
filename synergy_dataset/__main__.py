@@ -72,7 +72,11 @@ def info():
     parser.print_usage()
 
 
-def _write_review_metadata(datasets, active_vars, filter_kwargs, output_path):
+def _count_filtered_inclusions(dataset, filter_kwargs):
+    return sum(label for _, label in dataset.iter(validate=False, **filter_kwargs))
+
+
+def _write_review_metadata(datasets, active_vars, filter_kwargs, min_inclusions, output_path):
     """Write review_metadata.csv combining metadata.json and metadata_publication.json.
 
     Counts n_records and n_records_included by iterating with the active filters
@@ -96,6 +100,9 @@ def _write_review_metadata(datasets, active_vars, filter_kwargs, output_path):
             for _, label in dataset.iter(validate=False, **filter_kwargs):
                 n_records += 1
                 n_included += label
+
+            if n_included < min_inclusions:
+                continue
 
             # Load the review paper as a pyalex Work and apply extractors
             pub_work = Work(dataset.metadata["publication"])
@@ -177,6 +184,13 @@ def build_dataset(argv):
             "cleaned version (SYNERGY+ only)."
         ),
     )
+    parser.add_argument(
+        "--min-inclusions",
+        dest="min_inclusions",
+        type=int,
+        default=2,
+        help="Minimum number of included records required to output a dataset (default: 2).",
+    )
 
     args, _ = parser.parse_known_args()
 
@@ -229,18 +243,22 @@ def build_dataset(argv):
         if args.dataset is not None:
             datasets = [Dataset(name) for name in args.dataset]
             for d in datasets:
+                if _count_filtered_inclusions(d, filter_kwargs) < args.min_inclusions:
+                    continue
                 d.to_frame(args.vars, **filter_kwargs).to_csv(
                     Path(args.output, f"{d.name}.csv"), index=False
                 )
         else:
             datasets = list(iter_datasets())
             for dataset in tqdm(datasets):
+                if _count_filtered_inclusions(dataset, filter_kwargs) < args.min_inclusions:
+                    continue
                 dataset.to_frame(args.vars, **filter_kwargs).to_csv(
                     Path(args.output, f"{dataset.name}.csv"), index=False
                 )
 
         _write_review_metadata(
-            datasets, active_vars, filter_kwargs, Path(args.output)
+            datasets, active_vars, filter_kwargs, args.min_inclusions, Path(args.output)
         )
 
 

@@ -65,6 +65,7 @@ synergy get
 | `--no-abstract-filter` | filter enabled | Include works without an abstract *(SYNERGY+ only)* |
 | `--no-oa-filter` | OA only | Include closed-access works *(SYNERGY+ only)* |
 | `--no-cleaned-abstracts` | cleaned | Use the original abstract inverted index instead of the cleaned version *(SYNERGY+ only)* |
+| `--min-inclusions N` | `2` | Minimum number of included records required to output a dataset |
 
 **Examples**
 
