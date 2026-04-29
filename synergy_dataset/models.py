@@ -30,7 +30,7 @@ class DehydratedInstitution(_Base):
     ror: str | None = None
     country_code: str | None = None
     type: str | None = None
-    lineage: list[str] = []
+    lineage: list[str | None] = []
 
 
 class DehydratedSource(_Base):
@@ -43,7 +43,7 @@ class DehydratedSource(_Base):
     is_core: bool | None = None
     host_organization: str | None = None
     host_organization_name: str | None = None
-    host_organization_lineage: list[str] = []
+    host_organization_lineage: list[str | None] = []
     type: str | None = None
 
 
