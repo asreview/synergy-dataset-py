@@ -4,7 +4,6 @@ import os
 import sys
 from pathlib import Path
 
-from pyalex import Work
 from tabulate import tabulate
 from tqdm import tqdm
 
@@ -16,6 +15,7 @@ from synergy_dataset.base import download_raw_dataset
 from synergy_dataset.base import iter_datasets
 from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
+from synergy_dataset.models import WorkModel
 from synergy_dataset.splits import SPLITS
 
 LEGAL_NOTE = """
@@ -113,8 +113,8 @@ def _write_review_metadata(
             if n_included < min_inclusions:
                 continue
 
-            # Load the review paper as a pyalex Work and apply extractors
-            pub_work = Work(dataset.metadata["publication"])
+            # Load the review paper as a WorkModel and apply extractors
+            pub_work = WorkModel.model_validate(dataset.metadata["publication"])
             pub_fields = {field: fn(pub_work) for field, fn in extractors.items()}
 
             row = {
