@@ -65,11 +65,7 @@ WORK_EXTRACTORS = {
     # --- Core bibliographic ---
     "title": lambda w: _clean_str(w.title),
     "abstract": lambda w: _clean_str(
-        _reconstruct_abstract(
-            w.abstract_inverted_index_cleaned
-            if w.abstract_inverted_index_cleaned is not None
-            else w.abstract_inverted_index
-        )
+        _reconstruct_abstract(w.abstract_inverted_index_cleaned)
     ),
     "abstract_original": lambda w: _clean_str(
         _reconstruct_abstract(w.abstract_inverted_index)

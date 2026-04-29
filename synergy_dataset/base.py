@@ -351,19 +351,14 @@ class Dataset:
                             if is_plus and require_abstract:
                                 if validate:
                                     if use_cleaned_abstracts:
-                                        cleaned = work.abstract_inverted_index_cleaned
-                                        aii = (
-                                            cleaned
-                                            if cleaned is not None
-                                            else work.abstract_inverted_index
-                                        )
+                                        aii = work.abstract_inverted_index_cleaned
                                     else:
                                         aii = work.abstract_inverted_index
                                 else:
                                     if use_cleaned_abstracts:
                                         aii = work.get(
                                             "abstract_inverted_index_cleaned"
-                                        ) or work.get("abstract_inverted_index")
+                                        )
                                     else:
                                         aii = work.get("abstract_inverted_index")
                                 if not aii:
@@ -430,34 +425,28 @@ class Dataset:
                 )
             active_vars = list(vars)
 
-        # Pre-build records from labels so every openalex_id is represented
-        # even if the corresponding work JSON is missing. Column order follows
-        # the user-visible default: ids → work fields → label columns.
-        records = {}
-        for openalex_id, label_info in self.labels.items():
-            record = {
-                "doi": label_info["doi"],
-                "pmid": label_info["pmid"],
-                "lens_id": label_info["lens_id"],
-            }
-            for field in active_vars:
-                record[field] = None
-            record["label_included"] = label_info["label_included"]
-            if label_info["label_abstract_included"] is not None:
-                record["label_abstract_included"] = label_info[
-                    "label_abstract_included"
-                ]
-            records[openalex_id] = record
-
         extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
+        records = {}
         for work, _ in self.iter(
             require_abstract=require_abstract,
             require_open_access=require_open_access,
             use_cleaned_abstracts=use_cleaned_abstracts,
         ):
             work_id = work.id.lower()
+            label_info = self.labels[work_id]
+            record = {
+                "doi": label_info["doi"],
+                "pmid": label_info["pmid"],
+                "lens_id": label_info["lens_id"],
+            }
             for field, extractor in extractors.items():
-                records[work_id][field] = extractor(work)
+                record[field] = extractor(work)
+            record["label_included"] = label_info["label_included"]
+            if label_info["label_abstract_included"] is not None:
+                record["label_abstract_included"] = label_info[
+                    "label_abstract_included"
+                ]
+            records[work_id] = record
 
         return records
 

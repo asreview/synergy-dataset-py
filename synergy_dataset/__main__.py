@@ -73,18 +73,18 @@ def info():
     parser.print_usage()
 
 
-def _count_filtered_inclusions(dataset, filter_kwargs):
-    return sum(label for _, label in dataset.iter(validate=False, **filter_kwargs))
+def _count_filtered_records(dataset, filter_kwargs):
+    n_records, n_included = 0, 0
+    for _, label in dataset.iter(validate=False, **filter_kwargs):
+        n_records += 1
+        n_included += label
+    return n_records, n_included
 
 
 def _write_review_metadata(
-    datasets, active_vars, filter_kwargs, min_inclusions, output_path
+    datasets, counts, active_vars, min_inclusions, output_path
 ):
-    """Write review_metadata.csv combining metadata.json and metadata_publication.json.
-
-    Counts n_records and n_records_included by iterating with the active filters
-    so the numbers reflect the same subset that was exported per dataset.
-    """
+    """Write review_metadata.csv combining metadata.json and metadata_publication.json."""
     extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
     split_lookup = {name: i + 1 for i, fold in enumerate(SPLITS) for name in fold}
 
@@ -103,17 +103,11 @@ def _write_review_metadata(
         writer.writeheader()
 
         for dataset in datasets:
-            # Recount filtered records
-            n_records = 0
-            n_included = 0
-            for _, label in dataset.iter(validate=False, **filter_kwargs):
-                n_records += 1
-                n_included += label
+            n_records, n_included = counts[dataset.name]
 
             if n_included < min_inclusions:
                 continue
 
-            # Load the review paper as a WorkModel and apply extractors
             pub_work = WorkModel.model_validate(dataset.metadata["publication"])
             pub_fields = {field: fn(pub_work) for field, fn in extractors.items()}
 
@@ -251,10 +245,14 @@ def build_dataset(argv):
         else:
             active_vars = list(args.vars)
 
+        counts = {}
+
         if args.dataset is not None:
             datasets = [Dataset(name) for name in args.dataset]
             for d in datasets:
-                if _count_filtered_inclusions(d, filter_kwargs) < args.min_inclusions:
+                n_records, n_included = _count_filtered_records(d, filter_kwargs)
+                counts[d.name] = (n_records, n_included)
+                if n_included < args.min_inclusions:
                     continue
                 d.to_frame(args.vars, **filter_kwargs).to_csv(
                     Path(args.output, f"{d.name}.csv"), index=False
@@ -262,17 +260,17 @@ def build_dataset(argv):
         else:
             datasets = list(iter_datasets())
             for dataset in tqdm(datasets):
-                if (
-                    _count_filtered_inclusions(dataset, filter_kwargs)
-                    < args.min_inclusions
-                ):
+                n_records, n_included = _count_filtered_records(dataset, filter_kwargs)
+                counts[dataset.name] = (n_records, n_included)
+                if n_included < args.min_inclusions:
                     continue
                 dataset.to_frame(args.vars, **filter_kwargs).to_csv(
                     Path(args.output, f"{dataset.name}.csv"), index=False
                 )
 
+        print("Writing review metadata")
         _write_review_metadata(
-            datasets, active_vars, filter_kwargs, args.min_inclusions, Path(args.output)
+            datasets, counts, active_vars, args.min_inclusions, Path(args.output)
         )
 
 
