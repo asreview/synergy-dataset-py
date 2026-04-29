@@ -81,10 +81,9 @@ def _count_filtered_records(dataset, filter_kwargs):
     return n_records, n_included
 
 
-def _write_review_metadata(
-    datasets, counts, active_vars, min_inclusions, output_path
-):
-    """Write review_metadata.csv combining metadata.json and metadata_publication.json."""
+def _write_review_metadata(datasets, counts, active_vars, min_inclusions, output_path):
+    """Write review_metadata.csv combining metadata.json and 
+    metadata_publication.json."""
     extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
     split_lookup = {name: i + 1 for i, fold in enumerate(SPLITS) for name in fold}
 
