@@ -16,6 +16,7 @@ from synergy_dataset.base import download_raw_dataset
 from synergy_dataset.base import iter_datasets
 from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
+from synergy_dataset.splits import SPLITS
 
 LEGAL_NOTE = """
 Due to legal constraints, paper abstracts in SYNERGY cannot be published in
@@ -85,8 +86,11 @@ def _write_review_metadata(
     so the numbers reflect the same subset that was exported per dataset.
     """
     extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
+    split_lookup = {name: i + 1 for i, fold in enumerate(SPLITS) for name in fold}
+
     fieldnames = [
         "key",
+        "split",
         "data_doi",
         "n_records",
         "n_records_included",
@@ -115,6 +119,7 @@ def _write_review_metadata(
 
             row = {
                 "key": dataset.name,
+                "split": split_lookup.get(dataset.name),
                 "data_doi": dataset.metadata.get("data", {}).get("doi"),
                 "n_records": n_records,
                 "n_records_included": n_included,
