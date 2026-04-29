@@ -426,7 +426,10 @@ class Dataset:
             active_vars = list(vars)
 
         extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
-        records = {}
+        # For old synergy, pre-seed all label keys in CSV order so the
+        # returned dict is complete and ordered even if zip files are sparse.
+        is_plus = SYNERGY_SET == "synergy+"
+        records = {} if is_plus else {k: None for k in self.labels}
         for work, _ in self.iter(
             require_abstract=require_abstract,
             require_open_access=require_open_access,
