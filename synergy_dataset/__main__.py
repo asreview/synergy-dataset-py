@@ -1,8 +1,10 @@
 import argparse
+import csv
 import os
 import sys
 from pathlib import Path
 
+from pyalex import Work
 from tabulate import tabulate
 from tqdm import tqdm
 
@@ -12,6 +14,7 @@ from synergy_dataset.base import _dataset_available
 from synergy_dataset.base import _get_path_raw_dataset
 from synergy_dataset.base import download_raw_dataset
 from synergy_dataset.base import iter_datasets
+from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
 
 LEGAL_NOTE = """
@@ -69,6 +72,48 @@ def info():
     parser.print_usage()
 
 
+def _write_review_metadata(datasets, active_vars, filter_kwargs, output_path):
+    """Write review_metadata.csv combining metadata.json and metadata_publication.json.
+
+    Counts n_records and n_records_included by iterating with the active filters
+    so the numbers reflect the same subset that was exported per dataset.
+    """
+    extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
+    fieldnames = (
+        ["key", "data_doi", "n_records", "n_records_included", "eligibility_criteria"]
+        + list(extractors)
+    )
+
+    out = output_path / "review_metadata.csv"
+    with open(out, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for dataset in datasets:
+            # Recount filtered records
+            n_records = 0
+            n_included = 0
+            for _, label in dataset.iter(validate=False, **filter_kwargs):
+                n_records += 1
+                n_included += label
+
+            # Load the review paper as a pyalex Work and apply extractors
+            pub_work = Work(dataset.metadata["publication"])
+            pub_fields = {field: fn(pub_work) for field, fn in extractors.items()}
+
+            row = {
+                "key": dataset.name,
+                "data_doi": dataset.metadata.get("data", {}).get("doi"),
+                "n_records": n_records,
+                "n_records_included": n_included,
+                "eligibility_criteria": dataset.metadata.get("publication", {}).get(
+                    "eligibility_criteria"
+                ),
+            }
+            row.update(pub_fields)
+            writer.writerow(row)
+
+
 def build_dataset(argv):
     parser = argparse.ArgumentParser(
         prog="synergy",
@@ -108,6 +153,30 @@ def build_dataset(argv):
         help="Ignore legal message.",
         action="store_true",
     )
+    parser.add_argument(
+        "--no-abstract-filter",
+        dest="require_abstract",
+        default=True,
+        action="store_false",
+        help="Include works without an abstract (SYNERGY+ only).",
+    )
+    parser.add_argument(
+        "--no-oa-filter",
+        dest="require_open_access",
+        default=True,
+        action="store_false",
+        help="Include closed-access works (SYNERGY+ only).",
+    )
+    parser.add_argument(
+        "--no-cleaned-abstracts",
+        dest="use_cleaned_abstracts",
+        default=True,
+        action="store_false",
+        help=(
+            "Use the original abstract inverted index instead of the "
+            "cleaned version (SYNERGY+ only)."
+        ),
+    )
 
     args, _ = parser.parse_known_args()
 
@@ -144,18 +213,35 @@ def build_dataset(argv):
         # create output folder
         Path(args.output).mkdir(exist_ok=True, parents=True)
 
-        if args.dataset is not None:
-            for name in args.dataset:
-                d = Dataset(name)
-                result = d.to_frame()
+        filter_kwargs = dict(
+            require_abstract=args.require_abstract,
+            require_open_access=args.require_open_access,
+            use_cleaned_abstracts=args.use_cleaned_abstracts,
+        )
 
-                if args.output:
-                    result.to_csv(Path(args.output, f"{name}.csv"), index=False)
+        if args.vars is None:
+            active_vars = DEFAULT_VARS
+        elif args.vars == "extended":
+            active_vars = list(WORK_EXTRACTORS)
         else:
-            for dataset in tqdm(list(iter_datasets())):
-                dataset.to_frame(args.vars).to_csv(
+            active_vars = list(args.vars)
+
+        if args.dataset is not None:
+            datasets = [Dataset(name) for name in args.dataset]
+            for d in datasets:
+                d.to_frame(args.vars, **filter_kwargs).to_csv(
+                    Path(args.output, f"{d.name}.csv"), index=False
+                )
+        else:
+            datasets = list(iter_datasets())
+            for dataset in tqdm(datasets):
+                dataset.to_frame(args.vars, **filter_kwargs).to_csv(
                     Path(args.output, f"{dataset.name}.csv"), index=False
                 )
+
+        _write_review_metadata(
+            datasets, active_vars, filter_kwargs, Path(args.output)
+        )
 
 
 def list_datasets(argv):

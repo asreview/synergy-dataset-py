@@ -14,6 +14,7 @@ from pyalex import Work
 
 from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
+from synergy_dataset.splits import SPLITS
 
 SYNERGY_VERSION = (
     os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "1.0"
@@ -148,8 +149,6 @@ def iter_datasets(path=None, version=None, split=None, fold=1):
     Yields:
         Dataset: Dataset object
     """
-    from synergy_dataset.splits import SPLITS
-
     if split is not None:
         if SYNERGY_SET != "synergy+":
             raise ValueError(
@@ -234,11 +233,17 @@ class Dataset:
                 encoding="utf-8",
             ) as f:
                 self._metadata = json.load(f)
+            # Preserve fields from metadata.json's publication block (e.g.
+            # eligibility_criteria) before overwriting with the full OpenAlex
+            # work object from metadata_publication.json.
+            pub_meta_extra = self._metadata.pop("publication", {})
             with open(
                 Path(self._path, "metadata_publication.json"),
                 encoding="utf-8",
             ) as f:
                 self._metadata["publication"] = json.load(f)
+            for k, v in pub_meta_extra.items():
+                self._metadata["publication"].setdefault(k, v)
 
             try:
                 with open(
@@ -292,7 +297,13 @@ class Dataset:
 
         return self._labels
 
-    def iter(self, validate=True):
+    def iter(
+        self,
+        validate=True,
+        require_abstract=True,
+        require_open_access=True,
+        use_cleaned_abstracts=True,
+    ):
         """Iterate over the works in the dataset.
 
         Args:
@@ -300,6 +311,19 @@ class Dataset:
                 the OpenAlex schema using Pydantic. Set to False to skip
                 validation for performance-sensitive pipelines. Requires
                 ``pydantic`` (``pip install synergy-dataset[validation]``).
+            require_abstract (bool): If True (default), only yield works that
+                have a non-empty abstract. Which abstract field is checked
+                depends on ``use_cleaned_abstracts``. Only relevant for
+                SYNERGY+.
+            require_open_access (bool): If True (default), only yield works
+                that are open access (``open_access.is_oa == True``). Set to
+                False to include closed-access works. Only relevant for
+                SYNERGY+.
+            use_cleaned_abstracts (bool): If True (default), prefer the
+                cleaned abstract inverted index (``abstract_inverted_index_cleaned``)
+                over the original. Falls back to the original when the cleaned
+                field is absent. When False, always use the original
+                ``abstract_inverted_index``. Only relevant for SYNERGY+.
 
         Yields:
             tuple: (work, label_included) where work is a WorkModel
@@ -309,6 +333,7 @@ class Dataset:
         if validate:
             from synergy_dataset.models import WorkModel
 
+        is_plus = SYNERGY_SET == "synergy+"
         p_zipped_works = str(Path(self._path, "works_*.zip"))
 
         for f_work in glob.glob(p_zipped_works):
@@ -322,9 +347,50 @@ class Dataset:
                             label_included = label_info["label_included"]
 
                             work = WorkModel(**w) if validate else Work(w)
+
+                            if is_plus and require_abstract:
+                                if validate:
+                                    if use_cleaned_abstracts:
+                                        cleaned = work.abstract_inverted_index_cleaned
+                                        aii = (
+                                            cleaned
+                                            if cleaned is not None
+                                            else work.abstract_inverted_index
+                                        )
+                                    else:
+                                        aii = work.abstract_inverted_index
+                                else:
+                                    if use_cleaned_abstracts:
+                                        aii = work.get(
+                                            "abstract_inverted_index_cleaned"
+                                        ) or work.get("abstract_inverted_index")
+                                    else:
+                                        aii = work.get("abstract_inverted_index")
+                                if not aii:
+                                    continue
+
+                            if is_plus and require_open_access:
+                                if validate:
+                                    is_oa = (
+                                        work.open_access.is_oa
+                                        if work.open_access
+                                        else False
+                                    )
+                                else:
+                                    oa = work.get("open_access") or {}
+                                    is_oa = oa.get("is_oa", False)
+                                if not is_oa:
+                                    continue
+
                             yield work, label_included
 
-    def to_dict(self, vars=None):
+    def to_dict(
+        self,
+        vars=None,
+        require_abstract=True,
+        require_open_access=True,
+        use_cleaned_abstracts=True,
+    ):
         """Export the dataset to a dictionary.
 
         The base record for each work always contains the fields from
@@ -342,6 +408,12 @@ class Dataset:
                 - ``"extended"``: includes every field in ``WORK_EXTRACTORS``.
 
                 Run ``list(WORK_EXTRACTORS)`` to see all available names.
+            require_abstract (bool): Passed to ``iter()``. See ``iter()`` for
+                details.
+            require_open_access (bool): Passed to ``iter()``. See ``iter()``
+                for details.
+            use_cleaned_abstracts (bool): Passed to ``iter()``. See ``iter()``
+                for details.
 
         Returns:
             dict: Mapping of ``openalex_id`` to record dict.
@@ -378,25 +450,49 @@ class Dataset:
             records[openalex_id] = record
 
         extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
-        for work, _ in self.iter():
+        for work, _ in self.iter(
+            require_abstract=require_abstract,
+            require_open_access=require_open_access,
+            use_cleaned_abstracts=use_cleaned_abstracts,
+        ):
             work_id = work.id.lower()
             for field, extractor in extractors.items():
                 records[work_id][field] = extractor(work)
 
         return records
 
-    def to_frame(self, vars=None):
+    def to_frame(
+        self,
+        vars=None,
+        require_abstract=True,
+        require_open_access=True,
+        use_cleaned_abstracts=True,
+    ):
         """Export the dataset to a pandas DataFrame.
 
         Args:
             vars (list, str, or None): Passed directly to ``to_dict()``.
                 See ``to_dict()`` for details.
+            require_abstract (bool): Passed to ``to_dict()``. See ``iter()``
+                for details.
+            require_open_access (bool): Passed to ``to_dict()``. See ``iter()``
+                for details.
+            use_cleaned_abstracts (bool): Passed to ``to_dict()``. See ``iter()``
+                for details.
 
         Returns:
             pandas.DataFrame: DataFrame indexed by ``openalex_id``.
         """
         try:
-            df = pd.DataFrame.from_dict(self.to_dict(vars=vars), orient="index")
+            df = pd.DataFrame.from_dict(
+                self.to_dict(
+                    vars=vars,
+                    require_abstract=require_abstract,
+                    require_open_access=require_open_access,
+                    use_cleaned_abstracts=use_cleaned_abstracts,
+                ),
+                orient="index",
+            )
             df.index.name = "openalex_id"
             return df.reset_index()
         except NameError as err:

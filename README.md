@@ -1,21 +1,245 @@
-# Python package for the SYNERGY dataset
+# synergy-dataset
 
 ![PyPI](https://img.shields.io/pypi/v/synergy-dataset)
 
-The `synergy-dataset` Python package is the easiest way to download and built
-the SYNERGY dataset to your local device.
+Python package for the [SYNERGY](https://github.com/asreview/synergy-dataset) and [SYNERGY+](https://github.com/asreview/synergy-dataset) datasets — collections of systematically labelled records for systematic review research.
 
 ## Installation
 
-SYNERGY requires Python 3.6 or later.
+Requires Python 3.8 or later.
 
 ```sh
 pip install synergy-dataset
 ```
 
-## Getting started
+For Pydantic-based work validation:
 
-See [https://github.com/asreview/synergy-dataset](https://github.com/asreview/synergy-dataset) for documentation and getting started.
+```sh
+pip install "synergy-dataset[validation]"
+```
+
+## Dataset variants
+
+| Variable | Value | Dataset |
+|---|---|---|
+| `SYNERGY_SET` | `synergy+` (default) | SYNERGY+ |
+| `SYNERGY_SET` | `synergy` | Original SYNERGY |
+
+Set `SYNERGY_SET=synergy` in your environment to use the original SYNERGY dataset.
+
+---
+
+## Command-line interface
+
+### `synergy list` — list all datasets
+
+```sh
+synergy list
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--tablefmt FORMAT` | `simple` | Table format (any `tabulate` format) |
+| `--n-topics N` | `3` | Number of topics to show per dataset (`-1` for all) |
+
+### `synergy show DATASET` — show dataset details
+
+```sh
+synergy show Appenzeller-Herzog_2019
+```
+
+### `synergy get` — export datasets to CSV
+
+Exports one CSV per dataset to the output folder, plus a `review_metadata.csv` that combines key fields from each dataset's OpenAlex work object the studies' eligiblity criteria.
+
+```sh
+synergy get
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `-o, --output PATH` | `synergy_dataset` | Output folder |
+| `-v, --vars VARS` | title + abstract | Comma-separated list of extra fields, or `extended` for all OpenAlex fields |
+| `-d, --dataset NAME [NAME ...]` | all datasets | One or more dataset names to export |
+| `-l, --ignore-legal` | prompt | Skip the abstract plaintext legal prompt |
+| `--no-abstract-filter` | filter enabled | Include works without an abstract *(SYNERGY+ only)* |
+| `--no-oa-filter` | OA only | Include closed-access works *(SYNERGY+ only)* |
+| `--no-cleaned-abstracts` | cleaned | Use the original abstract inverted index instead of the cleaned version *(SYNERGY+ only)* |
+
+**Examples**
+
+Export all datasets with default fields (title + abstract, abstracts required):
+
+```sh
+synergy get -o ./output --ignore-legal
+```
+
+Export all works including closed-access and those without abstracts:
+
+```sh
+synergy get --no-oa-filter --no-abstract-filter --ignore-legal
+```
+
+Export all works regardless of abstract availability:
+
+```sh
+synergy get --no-abstract-filter --ignore-legal
+```
+
+Export with extended OpenAlex fields:
+
+```sh
+synergy get -v extended --ignore-legal
+```
+
+Export a single dataset with specific fields:
+
+```sh
+synergy get -d Appenzeller-Herzog_2019 -v cited_by_count,publication_year --ignore-legal
+```
+
+Available `--vars` fields (on top of the always-included `openalex_id`, `doi`, `pmid`, `lens_id`, `title`, `abstract`, `label_included`):
+
+```
+publication_year  publication_date  type              language
+language_fasttext cited_by_count    referenced_works_count  fwci
+is_retracted      is_paratext       is_oa             oa_status
+journal_name      author_names      authorships       primary_topic_name
+primary_topic_field  primary_topic_domain  topics     keywords
+mesh              sustainable_development_goals        indexed_in
+referenced_works  related_works     counts_by_year
+```
+
+#### Output files
+
+Each run of `synergy get` produces:
+
+- **`{dataset_name}.csv`** — one file per dataset, with one row per work (filtered by the active settings).
+- **`review_metadata.csv`** — one row per dataset, combining:
+  - `key` — dataset identifier (e.g. `Abgaz_2023`)
+  - `data_doi` — DOI of the dataset deposit
+  - `n_records` — number of works after applying the active filters
+  - `n_records_included` — number of included works after filtering
+  - `eligibility_criteria` — the screening criteria text from `metadata.json`
+  - All fields selected via `--vars` applied to the review publication itself (the OpenAlex work for the systematic review paper)
+
+### `synergy attribute` — attribution for datasets
+
+```sh
+synergy attribute
+synergy attribute --format markdown
+```
+
+---
+
+## Python API
+
+### Iterating over datasets
+
+```python
+from synergy_dataset import iter_datasets
+
+for dataset in iter_datasets():
+    print(dataset.name)
+```
+
+Filter by train/test split (SYNERGY+ only):
+
+```python
+for dataset in iter_datasets(split="train"):
+    ...
+
+for dataset in iter_datasets(split="test", fold=2):
+    ...
+```
+
+### Working with a single dataset
+
+```python
+from synergy_dataset import Dataset
+
+d = Dataset("Appenzeller-Herzog_2019")
+```
+
+#### Export to DataFrame
+
+```python
+df = d.to_frame()                         # title + abstract (abstracts required)
+df = d.to_frame(vars="extended")          # all OpenAlex fields
+df = d.to_frame(vars=["cited_by_count"])  # specific fields
+```
+
+**SYNERGY+ filtering options** (ignored for the original SYNERGY dataset):
+
+```python
+# Include all works, even those without an abstract
+df = d.to_frame(require_abstract=False)
+
+# Include closed-access works
+df = d.to_frame(require_open_access=False)
+
+# Use the original (uncleaned) abstract inverted index
+df = d.to_frame(use_cleaned_abstracts=False)
+
+# Combine: all works regardless of OA status, original abstracts
+df = d.to_frame(require_open_access=False, require_abstract=False, use_cleaned_abstracts=False)
+```
+
+#### Export to dict
+
+```python
+records = d.to_dict()                     # openalex_id → record dict
+records = d.to_dict(vars="extended", require_open_access=False)
+```
+
+#### Iterate over works
+
+```python
+for work, label in d.iter():
+    print(work.title, label)
+
+# Skip Pydantic validation for speed
+for work, label in d.iter(validate=False):
+    print(work["title"], label)
+
+# SYNERGY+ filters — include closed-access works
+for work, label in d.iter(require_open_access=False):
+    ...
+
+# Include works without abstracts, use original abstract index
+for work, label in d.iter(require_abstract=False, use_cleaned_abstracts=False):
+    ...
+```
+
+`iter()` parameters:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `validate` | `True` | Validate works against the OpenAlex Pydantic model |
+| `require_abstract` | `True` | Skip works without an abstract *(SYNERGY+ only)* |
+| `require_open_access` | `True` | Skip non-open-access works *(SYNERGY+ only)* |
+| `use_cleaned_abstracts` | `True` | Prefer `abstract_inverted_index_cleaned` over the original *(SYNERGY+ only)* |
+
+#### Dataset metadata and labels
+
+```python
+print(d.metadata)     # dict with dataset/publication/collection info
+print(d.labels)       # openalex_id → {doi, pmid, lens_id, label_included, ...}
+print(d.cite)         # citation string for this dataset
+print(d.summary())    # quick statistics
+```
+
+---
+
+## Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `SYNERGY_SET` | `synergy+` | Dataset variant: `synergy+` or `synergy` |
+| `SYNERGY_VERSION` | `1.0` | Dataset version to download |
+| `SYNERGY_PATH` | *(auto)* | Custom path to dataset; `development` for local dev |
+
+---
 
 ## License
 
@@ -23,4 +247,5 @@ See [https://github.com/asreview/synergy-dataset](https://github.com/asreview/sy
 
 ## Contact
 
-See [https://github.com/asreview/synergy-dataset](https://github.com/asreview/synergy-dataset) for contact details.
+- SYNERGY: [github.com/asreview/synergy-dataset](https://github.com/asreview/synergy-dataset)
+- SYNERGY+: [github.com/asreview/synergy-dataset](https://github.com/asreview/synergy-dataset)
