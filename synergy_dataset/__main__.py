@@ -267,9 +267,12 @@ def build_dataset(argv):
                     Path(args.output, f"{dataset.name}.csv"), index=False
                 )
 
+        metadata_path = Path(args.output) / "metadata"
+        metadata_path.mkdir(exist_ok=True, parents=True)
+
         print("Writing review metadata")
         _write_review_metadata(
-            datasets, counts, active_vars, args.min_inclusions, Path(args.output)
+            datasets, counts, active_vars, args.min_inclusions, metadata_path
         )
 
 
@@ -353,7 +356,6 @@ def list_datasets(argv):
             table_values,
             headers=["Nr", "Dataset", "Topic(s)", "Records", "Included", "%"],
             tablefmt=args.tablefmt,
-            # showindex="Nr",
         ),
         "\n",
     )
@@ -377,7 +379,7 @@ def show_dataset(argv):
     )
     args = parser.parse_args(argv)
 
-    # download the dataset if note available
+    # download the dataset if not available
     if not _dataset_available():
         download_raw_dataset()
 
