@@ -56,35 +56,21 @@ Exports one CSV per dataset to the output folder, plus a `review_metadata.csv` t
 synergy get
 ```
 
+For SYNERGY+, only open-access works with a non-empty cleaned abstract are exported. Datasets with fewer than 3 included records are skipped.
+
 | Flag | Default | Description |
 |---|---|---|
 | `-o, --output PATH` | `synergy_dataset` | Output folder |
 | `-v, --vars VARS` | title + abstract | Comma-separated list of extra fields, or `extended` for all OpenAlex fields |
 | `-d, --dataset NAME [NAME ...]` | all datasets | One or more dataset names to export |
 | `-l, --ignore-legal` | prompt | Skip the abstract plaintext legal prompt |
-| `--no-abstract-filter` | filter enabled | Include works without an abstract *(SYNERGY+ only)* |
-| `--no-oa-filter` | OA only | Include closed-access works *(SYNERGY+ only)* |
-| `--no-cleaned-abstracts` | cleaned | Use the original abstract inverted index instead of the cleaned version *(SYNERGY+ only)* |
-| `--min-inclusions N` | `2` | Minimum number of included records required to output a dataset |
 
 **Examples**
 
-Export all datasets with default fields (title + abstract, abstracts required):
+Export all datasets with default fields:
 
 ```sh
 synergy get -o ./output --ignore-legal
-```
-
-Export all works including closed-access and those without abstracts:
-
-```sh
-synergy get --no-oa-filter --no-abstract-filter --ignore-legal
-```
-
-Export all works regardless of abstract availability:
-
-```sh
-synergy get --no-abstract-filter --ignore-legal
 ```
 
 Export with extended OpenAlex fields:
@@ -116,11 +102,12 @@ referenced_works  related_works     counts_by_year
 Each run of `synergy get` produces:
 
 - **`{dataset_name}.csv`** — one file per dataset, with one row per work (filtered by the active settings).
-- **`review_metadata.csv`** — one row per dataset, combining:
+- **`review_metadata.csv`** — one row per dataset (≥ 3 inclusions), combining:
   - `key` — dataset identifier (e.g. `Abgaz_2023`)
+  - `split` — `train` or `test` (SYNERGY+ only)
   - `data_doi` — DOI of the dataset deposit
-  - `n_records` — number of works after applying the active filters
-  - `n_records_included` — number of included works after filtering
+  - `n_records` — number of works in the export
+  - `n_records_included` — number of included works
   - `eligibility_criteria` — the screening criteria text from `metadata.json`
   - All fields selected via `--vars` applied to the review publication itself (the OpenAlex work for the systematic review paper)
 
@@ -150,7 +137,7 @@ Filter by train/test split (SYNERGY+ only):
 for dataset in iter_datasets(split="train"):
     ...
 
-for dataset in iter_datasets(split="test", fold=2):
+for dataset in iter_datasets(split="test"):
     ...
 ```
 
@@ -165,32 +152,18 @@ d = Dataset("Appenzeller-Herzog_2019")
 #### Export to DataFrame
 
 ```python
-df = d.to_frame()                         # title + abstract (abstracts required)
+df = d.to_frame()                         # title + abstract
 df = d.to_frame(vars="extended")          # all OpenAlex fields
 df = d.to_frame(vars=["cited_by_count"])  # specific fields
 ```
 
-**SYNERGY+ filtering options** (ignored for the original SYNERGY dataset):
-
-```python
-# Include all works, even those without an abstract
-df = d.to_frame(require_abstract=False)
-
-# Include closed-access works
-df = d.to_frame(require_open_access=False)
-
-# Use the original (uncleaned) abstract inverted index
-df = d.to_frame(use_cleaned_abstracts=False)
-
-# Combine: all works regardless of OA status, original abstracts
-df = d.to_frame(require_open_access=False, require_abstract=False, use_cleaned_abstracts=False)
-```
+For SYNERGY+, only open-access works with a non-empty cleaned abstract are included.
 
 #### Export to dict
 
 ```python
-records = d.to_dict()                     # openalex_id → record dict
-records = d.to_dict(vars="extended", require_open_access=False)
+records = d.to_dict()              # openalex_id → record dict
+records = d.to_dict(vars="extended")
 ```
 
 #### Iterate over works
@@ -202,14 +175,6 @@ for work, label in d.iter():
 # Skip Pydantic validation for speed
 for work, label in d.iter(validate=False):
     print(work["title"], label)
-
-# SYNERGY+ filters — include closed-access works
-for work, label in d.iter(require_open_access=False):
-    ...
-
-# Include works without abstracts, use original abstract index
-for work, label in d.iter(require_abstract=False, use_cleaned_abstracts=False):
-    ...
 ```
 
 `iter()` parameters:
@@ -217,9 +182,6 @@ for work, label in d.iter(require_abstract=False, use_cleaned_abstracts=False):
 | Parameter | Default | Description |
 |---|---|---|
 | `validate` | `True` | Validate works against the OpenAlex Pydantic model |
-| `require_abstract` | `True` | Skip works without an abstract *(SYNERGY+ only)* |
-| `require_open_access` | `True` | Skip non-open-access works *(SYNERGY+ only)* |
-| `use_cleaned_abstracts` | `True` | Prefer `abstract_inverted_index_cleaned` over the original *(SYNERGY+ only)* |
 
 #### Dataset metadata and labels
 
