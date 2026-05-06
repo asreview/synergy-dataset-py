@@ -14,7 +14,7 @@ from pyalex import Work
 
 from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
-from synergy_dataset.splits import SPLITS
+from synergy_dataset.splits import TEST_SPLIT
 
 SYNERGY_VERSION = (
     os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "1.0"
@@ -131,7 +131,7 @@ def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
     download_raw_dataset(url=url_download, path=path)
 
 
-def iter_datasets(path=None, version=None, split=None, fold=1):
+def iter_datasets(path=None, version=None, split=None):
     """Iterate over the available datasets.
 
     Args:
@@ -140,11 +140,7 @@ def iter_datasets(path=None, version=None, split=None, fold=1):
         version (str, optional): The version of the dataset to download.
         split (str, optional): If provided, yield only datasets belonging to
             the given split. One of ``"train"`` or ``"test"``. When omitted,
-            all datasets are yielded. Uses ``fold=1`` (the official split) by
-            default.
-        fold (int): Which fold to use for the split (1-indexed). Fold 1 is
-            the official train/test split. Only relevant when ``split`` is set.
-            Default is 1.
+            all datasets are yielded. Only available for SYNERGY+.
 
     Yields:
         Dataset: Dataset object
@@ -158,15 +154,9 @@ def iter_datasets(path=None, version=None, split=None, fold=1):
             )
         if split not in ("train", "test"):
             raise ValueError(f"split must be 'train' or 'test', got {split!r}")
-        if not 1 <= fold <= len(SPLITS):
-            raise ValueError(f"fold must be between 1 and {len(SPLITS)}, got {fold}")
-        test_names = set(SPLITS[fold - 1])
-        if split == "test":
-            allowed = test_names
-        else:
-            allowed = {
-                name for fold_names in SPLITS for name in fold_names
-            } - test_names
+        test_names = set(TEST_SPLIT)
+    else:
+        test_names = None
 
     version = SYNERGY_VERSION if version is None else version
 
@@ -176,7 +166,6 @@ def iter_datasets(path=None, version=None, split=None, fold=1):
     elif path is None and _dataset_available():
         path = _get_path_raw_dataset(version=version)
     else:
-        version = SYNERGY_VERSION if version is None else version
         path = Path(path, f"synergy-dataset-{version}")
 
     for dataset in sorted(
@@ -184,7 +173,9 @@ def iter_datasets(path=None, version=None, split=None, fold=1):
         key=lambda x: x.lower(),
     ):
         name = Path(dataset).parts[-2]
-        if split is not None and name not in allowed:
+        if split == "test" and name not in test_names:
+            continue
+        if split == "train" and name in test_names:
             continue
         yield Dataset(name, path=Path(dataset).parent)
 
@@ -279,8 +270,9 @@ class Dataset:
                 encoding="utf-8",
             ) as idfile:
                 reader = csv.DictReader(idfile)
-                fieldnames = reader.fieldnames or []
-                has_abstract_label = "label_abstract_included" in fieldnames
+                has_abstract_label = "label_abstract_included" in (
+                    reader.fieldnames or []
+                )
                 for row in reader:
                     self._labels[row["openalex_id"].lower()] = {
                         "doi": row.get("doi") or None,
@@ -297,33 +289,17 @@ class Dataset:
 
         return self._labels
 
-    def iter(
-        self,
-        validate=True,
-        require_abstract=True,
-        require_open_access=True,
-        use_cleaned_abstracts=True,
-    ):
+    def iter(self, validate=True):
         """Iterate over the works in the dataset.
+
+        For SYNERGY+, only open-access works with a non-empty cleaned abstract
+        are yielded.
 
         Args:
             validate (bool): If True (default), validate each work against
                 the OpenAlex schema using Pydantic. Set to False to skip
                 validation for performance-sensitive pipelines. Requires
                 ``pydantic`` (``pip install synergy-dataset[validation]``).
-            require_abstract (bool): If True (default), only yield works that
-                have a non-empty abstract. Which abstract field is checked
-                depends on ``use_cleaned_abstracts``. Only relevant for
-                SYNERGY+.
-            require_open_access (bool): If True (default), only yield works
-                that are open access (``open_access.is_oa == True``). Set to
-                False to include closed-access works. Only relevant for
-                SYNERGY+.
-            use_cleaned_abstracts (bool): If True (default), prefer the
-                cleaned abstract inverted index (``abstract_inverted_index_cleaned``)
-                over the original. Falls back to the original when the cleaned
-                field is absent. When False, always use the original
-                ``abstract_inverted_index``. Only relevant for SYNERGY+.
 
         Yields:
             tuple: (work, label_included) where work is a WorkModel
@@ -348,44 +324,24 @@ class Dataset:
 
                             work = WorkModel(**w) if validate else Work(w)
 
-                            if is_plus and require_abstract:
+                            if is_plus:
                                 if validate:
-                                    if use_cleaned_abstracts:
-                                        aii = work.abstract_inverted_index_cleaned
-                                    else:
-                                        aii = work.abstract_inverted_index
-                                else:
-                                    if use_cleaned_abstracts:
-                                        aii = work.get(
-                                            "abstract_inverted_index_cleaned"
-                                        )
-                                    else:
-                                        aii = work.get("abstract_inverted_index")
-                                if not aii:
-                                    continue
-
-                            if is_plus and require_open_access:
-                                if validate:
+                                    aii = work.abstract_inverted_index_cleaned
                                     is_oa = (
                                         work.open_access.is_oa
                                         if work.open_access
                                         else False
                                     )
                                 else:
+                                    aii = work.get("abstract_inverted_index_cleaned")
                                     oa = work.get("open_access") or {}
                                     is_oa = oa.get("is_oa", False)
-                                if not is_oa:
+                                if not aii or not is_oa:
                                     continue
 
                             yield work, label_included
 
-    def to_dict(
-        self,
-        vars=None,
-        require_abstract=True,
-        require_open_access=True,
-        use_cleaned_abstracts=True,
-    ):
+    def to_dict(self, vars=None):
         """Export the dataset to a dictionary.
 
         The base record for each work always contains the fields from
@@ -403,12 +359,6 @@ class Dataset:
                 - ``"extended"``: includes every field in ``WORK_EXTRACTORS``.
 
                 Run ``list(WORK_EXTRACTORS)`` to see all available names.
-            require_abstract (bool): Passed to ``iter()``. See ``iter()`` for
-                details.
-            require_open_access (bool): Passed to ``iter()``. See ``iter()``
-                for details.
-            use_cleaned_abstracts (bool): Passed to ``iter()``. See ``iter()``
-                for details.
 
         Returns:
             dict: Mapping of ``openalex_id`` to record dict.
@@ -430,11 +380,7 @@ class Dataset:
         # returned dict is complete and ordered even if zip files are sparse.
         is_plus = SYNERGY_SET == "synergy+"
         records = {} if is_plus else {k: None for k in self.labels}
-        for work, _ in self.iter(
-            require_abstract=require_abstract,
-            require_open_access=require_open_access,
-            use_cleaned_abstracts=use_cleaned_abstracts,
-        ):
+        for work, _ in self.iter():
             work_id = work.id.lower()
             label_info = self.labels[work_id]
             record = {
@@ -453,36 +399,19 @@ class Dataset:
 
         return records
 
-    def to_frame(
-        self,
-        vars=None,
-        require_abstract=True,
-        require_open_access=True,
-        use_cleaned_abstracts=True,
-    ):
+    def to_frame(self, vars=None):
         """Export the dataset to a pandas DataFrame.
 
         Args:
             vars (list, str, or None): Passed directly to ``to_dict()``.
                 See ``to_dict()`` for details.
-            require_abstract (bool): Passed to ``to_dict()``. See ``iter()``
-                for details.
-            require_open_access (bool): Passed to ``to_dict()``. See ``iter()``
-                for details.
-            use_cleaned_abstracts (bool): Passed to ``to_dict()``. See ``iter()``
-                for details.
 
         Returns:
             pandas.DataFrame: DataFrame indexed by ``openalex_id``.
         """
         try:
             df = pd.DataFrame.from_dict(
-                self.to_dict(
-                    vars=vars,
-                    require_abstract=require_abstract,
-                    require_open_access=require_open_access,
-                    use_cleaned_abstracts=use_cleaned_abstracts,
-                ),
+                self.to_dict(vars=vars),
                 orient="index",
             )
             df.index.name = "openalex_id"

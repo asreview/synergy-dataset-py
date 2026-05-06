@@ -66,26 +66,21 @@ def test_iter_datasets_split_invalid_raises():
         next(iter_datasets(split="val"))
 
 
-def test_iter_datasets_split_fold_invalid_raises():
-    with pytest.raises(ValueError, match="fold must be"):
-        next(iter_datasets(split="test", fold=99))
-
-
 def test_iter_datasets_train_test_are_disjoint():
-    from synergy_dataset.splits import SPLITS
+    from synergy_dataset.splits import TEST_SPLIT
 
-    if not any(SPLITS):
-        pytest.skip("SPLITS not yet populated")
+    if not TEST_SPLIT:
+        pytest.skip("TEST_SPLIT not yet populated")
     train = {d.name for d in iter_datasets(split="train")}
     test = {d.name for d in iter_datasets(split="test")}
     assert train.isdisjoint(test)
 
 
 def test_iter_datasets_train_test_cover_all():
-    from synergy_dataset.splits import SPLITS
+    from synergy_dataset.splits import TEST_SPLIT
 
-    if not any(SPLITS):
-        pytest.skip("SPLITS not yet populated")
+    if not TEST_SPLIT:
+        pytest.skip("TEST_SPLIT not yet populated")
     all_names = {d.name for d in iter_datasets()}
     train = {d.name for d in iter_datasets(split="train")}
     test = {d.name for d in iter_datasets(split="test")}

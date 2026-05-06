@@ -16,7 +16,7 @@ from synergy_dataset.base import iter_datasets
 from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
 from synergy_dataset.models import WorkModel
-from synergy_dataset.splits import SPLITS
+from synergy_dataset.splits import TEST_SPLIT
 
 LEGAL_NOTE = """
 Due to legal constraints, paper abstracts in SYNERGY cannot be published in
@@ -73,19 +73,23 @@ def info():
     parser.print_usage()
 
 
-def _count_filtered_records(dataset, filter_kwargs):
+def _count_filtered_records(dataset):
     n_records, n_included = 0, 0
-    for _, label in dataset.iter(validate=False, **filter_kwargs):
+    for _, label in dataset.iter(validate=False):
         n_records += 1
         n_included += label
     return n_records, n_included
 
 
-def _write_review_metadata(datasets, counts, active_vars, min_inclusions, output_path):
-    """Write review_metadata.csv combining metadata.json and 
+def _write_review_metadata(datasets, counts, active_vars, output_path):
+    """Write review_metadata.csv combining metadata.json and
     metadata_publication.json."""
     extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
-    split_lookup = {name: i + 1 for i, fold in enumerate(SPLITS) for name in fold}
+    test_names = set(TEST_SPLIT)
+    all_names = test_names | {d.name for d in datasets}
+    split_lookup = {
+        name: "test" if name in test_names else "train" for name in all_names
+    }
 
     fieldnames = [
         "key",
@@ -104,7 +108,7 @@ def _write_review_metadata(datasets, counts, active_vars, min_inclusions, output
         for dataset in datasets:
             n_records, n_included = counts[dataset.name]
 
-            if n_included < min_inclusions:
+            if n_included < 3:
                 continue
 
             pub_work = WorkModel.model_validate(dataset.metadata["publication"])
@@ -163,61 +167,21 @@ def build_dataset(argv):
         help="Ignore legal message.",
         action="store_true",
     )
-    parser.add_argument(
-        "--no-abstract-filter",
-        dest="require_abstract",
-        default=True,
-        action="store_false",
-        help="Include works without an abstract (SYNERGY+ only).",
-    )
-    parser.add_argument(
-        "--no-oa-filter",
-        dest="require_open_access",
-        default=True,
-        action="store_false",
-        help="Include closed-access works (SYNERGY+ only).",
-    )
-    parser.add_argument(
-        "--no-cleaned-abstracts",
-        dest="use_cleaned_abstracts",
-        default=True,
-        action="store_false",
-        help=(
-            "Use the original abstract inverted index instead of the "
-            "cleaned version (SYNERGY+ only)."
-        ),
-    )
-    parser.add_argument(
-        "--min-inclusions",
-        dest="min_inclusions",
-        type=int,
-        default=2,
-        help="Minimum number of included records required to output a dataset "
-        "(default: 2).",
-    )
 
     args, _ = parser.parse_known_args()
 
     if not args.legal:
         user_input = input(f"{LEGAL_NOTE} ([Y]es,[N]o):\n")
         if user_input.lower() in ["n", "no"]:
-            if _dataset_available():
-                print(
-                    "SYNERGY dataset already downloaded, but not",
-                    "possible to build dataset (because of answer No).",
-                )
-            else:
-                print(
-                    "Downloading dataset, but not"
-                    "possible to build dataset (because of answer No)."
-                )
+            print("Not possible to build dataset (because of answer No).")
+            return
         elif user_input.lower() in ["y", "yes"]:
             args.legal = True
         else:
             print("Not a valid answer.")
             exit(1)
 
-    # download the dataset if note available
+    # download the dataset if not available
     if not _dataset_available():
         download_raw_dataset()
 
@@ -231,12 +195,6 @@ def build_dataset(argv):
         # create output folder
         Path(args.output).mkdir(exist_ok=True, parents=True)
 
-        filter_kwargs = dict(
-            require_abstract=args.require_abstract,
-            require_open_access=args.require_open_access,
-            use_cleaned_abstracts=args.use_cleaned_abstracts,
-        )
-
         if args.vars is None:
             active_vars = DEFAULT_VARS
         elif args.vars == "extended":
@@ -248,22 +206,22 @@ def build_dataset(argv):
 
         if args.dataset is not None:
             datasets = [Dataset(name) for name in args.dataset]
-            for d in datasets:
-                n_records, n_included = _count_filtered_records(d, filter_kwargs)
-                counts[d.name] = (n_records, n_included)
-                if n_included < args.min_inclusions:
+            for dataset in datasets:
+                n_records, n_included = _count_filtered_records(dataset)
+                counts[dataset.name] = (n_records, n_included)
+                if n_included < 3:
                     continue
-                d.to_frame(args.vars, **filter_kwargs).to_csv(
-                    Path(args.output, f"{d.name}.csv"), index=False
+                dataset.to_frame(args.vars).to_csv(
+                    Path(args.output, f"{dataset.name}.csv"), index=False
                 )
         else:
             datasets = list(iter_datasets())
             for dataset in tqdm(datasets):
-                n_records, n_included = _count_filtered_records(dataset, filter_kwargs)
+                n_records, n_included = _count_filtered_records(dataset)
                 counts[dataset.name] = (n_records, n_included)
-                if n_included < args.min_inclusions:
+                if n_included < 3:
                     continue
-                dataset.to_frame(args.vars, **filter_kwargs).to_csv(
+                dataset.to_frame(args.vars).to_csv(
                     Path(args.output, f"{dataset.name}.csv"), index=False
                 )
 
@@ -271,9 +229,7 @@ def build_dataset(argv):
         metadata_path.mkdir(exist_ok=True, parents=True)
 
         print("Writing review metadata")
-        _write_review_metadata(
-            datasets, counts, active_vars, args.min_inclusions, metadata_path
-        )
+        _write_review_metadata(datasets, counts, active_vars, metadata_path)
 
 
 def list_datasets(argv):
@@ -294,7 +250,7 @@ def list_datasets(argv):
     )
     args = parser.parse_args(argv)
 
-    # download the dataset if note available
+    # download the dataset if not available
     if not _dataset_available():
         download_raw_dataset()
 
@@ -335,7 +291,7 @@ def list_datasets(argv):
         table_values.append(
             [
                 i + 1,
-                "{}".format(dataset.metadata["key"]),
+                dataset.metadata["key"],
                 concepts_str,
                 dataset.metadata["data"]["n_records"],
                 dataset.metadata["data"]["n_records_included"],
@@ -449,60 +405,46 @@ def attribute_dataset(argv):
     )
     args = parser.parse_args(argv)
 
-    # download the dataset if note available
+    # download the dataset if not available
     if not _dataset_available():
         download_raw_dataset()
 
-    # without url
-    if args.format == "text":
-        authors = []
-
-        for dataset in iter_datasets():
-            for a in dataset.metadata["publication"]["authorships"]:
-                authors.append(a["author"]["display_name"])
-    elif args.format == "markdown":
-        authors = []
-
-        for dataset in iter_datasets():
-            for a in dataset.metadata["publication"]["authorships"]:
-                if "orcid" in a["author"] and a["author"]["orcid"]:
-                    authors.append(
-                        f"[{a['author']['display_name']}]({a['author']['orcid']})"
-                    )
-                else:
-                    authors.append(a["author"]["display_name"])
-    else:
+    if args.format not in ("text", "markdown"):
         raise ValueError(f"Format not found '{args.format}'")
 
-    print(
-        "\nWe would like to thank the following authors for openly",
-        "sharing the data correponding their systematic review:\n",
-    )
-
-    print(", ".join(list(set(authors))), "\n")
-
-    print("\nReferences to datasets:\n")
     prefix = "" if args.format == "text" else "> "
-
-    for dataset in iter_datasets():
-        print(
-            f"{prefix}[{dataset.metadata['key']}]",
-            dataset.cite,
-        )
-
-    print(
-        "\nWe thank the authors of the following collections",
-        "of systematic reviews:\n",
-    )
-
+    authors = []
+    citations = []
     collections = []
+
     for dataset in iter_datasets():
+        for a in dataset.metadata["publication"]["authorships"]:
+            author = a["author"]
+            if args.format == "markdown" and author.get("orcid"):
+                authors.append(f"[{author['display_name']}]({author['orcid']})")
+            else:
+                authors.append(author["display_name"])
+        citations.append((dataset.metadata["key"], dataset.cite))
         try:
             collections.append(dataset.cite_collection)
         except FileNotFoundError:
             pass
 
-    for c in sorted(list(set(collections))):
+    print(
+        "\nWe would like to thank the following authors for openly",
+        "sharing the data corresponding their systematic review:\n",
+    )
+    print(", ".join(sorted(set(authors))), "\n")
+
+    print("\nReferences to datasets:\n")
+    for key, cite in citations:
+        print(f"{prefix}[{key}]", cite)
+
+    print(
+        "\nWe thank the authors of the following collections",
+        "of systematic reviews:\n",
+    )
+    for c in sorted(set(collections)):
         print(f"{prefix}{c}")
 
 
