@@ -14,6 +14,7 @@ from pyalex import Work
 
 from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
+from synergy_dataset.extractors import _reconstruct_abstract
 from synergy_dataset.splits import TEST_SPLIT
 
 SYNERGY_VERSION = (
@@ -22,6 +23,21 @@ SYNERGY_VERSION = (
 SYNERGY_PATH = os.getenv("SYNERGY_PATH")
 SYNERGY_SET = os.getenv("SYNERGY_SET", "synergy+")
 SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
+
+ABSTRACT_MIN_WORDS = 20
+ABSTRACT_MIN_CHARS = 100
+
+
+def _has_valid_abstract(abstract_inverted_index):
+    """Return True if the reconstructed abstract meets minimum length thresholds."""
+    abstract = _reconstruct_abstract(abstract_inverted_index)
+    if not abstract:
+        return False
+    return (
+        len(abstract.split()) >= ABSTRACT_MIN_WORDS
+        or len(abstract) >= ABSTRACT_MIN_CHARS
+    )
+
 
 # Initialize requests-cache with a 24-hour expiration
 requests_cache.install_cache("synergy_cache", expire_after=24 * 60 * 60)
@@ -292,8 +308,8 @@ class Dataset:
     def iter(self, validate=True):
         """Iterate over the works in the dataset.
 
-        For SYNERGY+, only open-access works with a non-empty cleaned abstract
-        are yielded.
+        For SYNERGY+, only open-access works with a valid abstract
+        (>= 20 words or >= 100 characters) are yielded.
 
         Args:
             validate (bool): If True (default), validate each work against
@@ -336,7 +352,7 @@ class Dataset:
                                     aii = work.get("abstract_inverted_index_cleaned")
                                     oa = work.get("open_access") or {}
                                     is_oa = oa.get("is_oa", False)
-                                if not aii or not is_oa:
+                                if not is_oa or not _has_valid_abstract(aii):
                                     continue
 
                             yield work, label_included

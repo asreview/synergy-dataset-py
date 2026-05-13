@@ -56,7 +56,7 @@ Exports one CSV per dataset to the output folder, plus a `review_metadata.csv` t
 synergy get
 ```
 
-For SYNERGY+, only open-access works with a non-empty cleaned abstract are exported. Datasets with fewer than 3 included records are skipped.
+For SYNERGY+, only open-access works with a valid abstract (≥ 20 words or ≥ 100 characters) are exported. Datasets with fewer than 3 included records are skipped.
 
 | Flag | Default | Description |
 |---|---|---|
@@ -157,7 +157,7 @@ df = d.to_frame(vars="extended")          # all OpenAlex fields
 df = d.to_frame(vars=["cited_by_count"])  # specific fields
 ```
 
-For SYNERGY+, only open-access works with a non-empty cleaned abstract are included.
+For SYNERGY+, only open-access works with a valid abstract (≥ 20 words or ≥ 100 characters) are included.
 
 #### Export to dict
 
