@@ -386,9 +386,9 @@ def test_has_valid_abstract_enough_words():
 
 
 def test_has_valid_abstract_enough_chars():
-    # 5 long words — under 20 words but over 100 chars
-    index = {"averylongword": [i] for i in range(5)}
-    abstract = " ".join(["averylongword"] * 5)
+    # 8 long words — under 20 words but over 100 chars
+    index = {f"averylongword{i}": [i] for i in range(8)}
+    abstract = " ".join([f"averylongword{i}" for i in range(8)])
     assert len(abstract) >= 100
     assert _has_valid_abstract(index) is True
 
