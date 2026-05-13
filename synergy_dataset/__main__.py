@@ -34,6 +34,8 @@ to the version of the SYNERGY dataset.
 
 Would you like to convert the inverted abstract to plaintext?"""
 
+MIN_INCLUSIONS = 5
+
 
 def main():
     if os.getenv("SYNERGY_PATH") == "development":
@@ -73,7 +75,7 @@ def info():
     parser.print_usage()
 
 
-def _count_filtered_records(dataset):
+def _count_records(dataset):
     n_records, n_included = 0, 0
     for _, label in dataset.iter(validate=False):
         n_records += 1
@@ -108,7 +110,7 @@ def _write_review_metadata(datasets, counts, active_vars, output_path):
         for dataset in datasets:
             n_records, n_included = counts[dataset.name]
 
-            if n_included < 3:
+            if n_included < MIN_INCLUSIONS:
                 continue
 
             pub_work = WorkModel.model_validate(dataset.metadata["publication"])
@@ -207,9 +209,9 @@ def build_dataset(argv):
         if args.dataset is not None:
             datasets = [Dataset(name) for name in args.dataset]
             for dataset in datasets:
-                n_records, n_included = _count_filtered_records(dataset)
+                n_records, n_included = _count_records(dataset)
                 counts[dataset.name] = (n_records, n_included)
-                if n_included < 3:
+                if n_included < MIN_INCLUSIONS:
                     continue
                 dataset.to_frame(args.vars).to_csv(
                     Path(args.output, f"{dataset.name}.csv"), index=False
@@ -217,9 +219,9 @@ def build_dataset(argv):
         else:
             datasets = list(iter_datasets())
             for dataset in tqdm(datasets):
-                n_records, n_included = _count_filtered_records(dataset)
+                n_records, n_included = _count_records(dataset)
                 counts[dataset.name] = (n_records, n_included)
-                if n_included < 3:
+                if n_included < MIN_INCLUSIONS:
                     continue
                 dataset.to_frame(args.vars).to_csv(
                     Path(args.output, f"{dataset.name}.csv"), index=False

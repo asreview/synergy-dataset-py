@@ -12,12 +12,6 @@ Requires Python 3.8 or later.
 pip install synergy-dataset
 ```
 
-For Pydantic-based work validation:
-
-```sh
-pip install "synergy-dataset[validation]"
-```
-
 ## Dataset variants
 
 | Variable | Value | Dataset |
@@ -56,7 +50,7 @@ Exports one CSV per dataset to the output folder, plus a `review_metadata.csv` t
 synergy get
 ```
 
-For SYNERGY+, only open-access works with a valid abstract (≥ 20 words or ≥ 100 characters) are exported. Datasets with fewer than 3 included records are skipped.
+For SYNERGY+, only open-access works with a valid abstract (≥ 20 words or ≥ 100 characters) are exported. Datasets with fewer than 5 included records are skipped.
 
 | Flag | Default | Description |
 |---|---|---|
@@ -102,7 +96,7 @@ referenced_works  related_works     counts_by_year
 Each run of `synergy get` produces:
 
 - **`{dataset_name}.csv`** — one file per dataset, with one row per work (filtered by the active settings).
-- **`review_metadata.csv`** — one row per dataset (≥ 3 inclusions), combining:
+- **`review_metadata.csv`** — one row per dataset (≥ 5 inclusions), combining:
   - `key` — dataset identifier (e.g. `Abgaz_2023`)
   - `split` — `train` or `test` (SYNERGY+ only)
   - `data_doi` — DOI of the dataset deposit
