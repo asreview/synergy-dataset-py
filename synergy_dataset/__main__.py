@@ -34,7 +34,7 @@ to the version of the SYNERGY dataset.
 
 Would you like to convert the inverted abstract to plaintext?"""
 
-MIN_INCLUSIONS = 5
+MIN_INCLUSIONS = 3
 
 
 def main():
