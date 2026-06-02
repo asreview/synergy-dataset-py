@@ -28,8 +28,8 @@ ABSTRACT_MIN_WORDS = 20
 ABSTRACT_MIN_CHARS = 100
 
 
-def _has_valid_abstract(abstract_inverted_index):
-    """Return True if the reconstructed abstract meets minimum length thresholds."""
+def _is_valid_abstract(abstract_inverted_index):
+    """Return True if the reconstructed abstract meets the minimum length thresholds."""
     abstract = _reconstruct_abstract(abstract_inverted_index)
     if not abstract:
         return False
@@ -352,7 +352,7 @@ class Dataset:
                                     aii = work.get("abstract_inverted_index_cleaned")
                                     oa = work.get("open_access") or {}
                                     is_oa = oa.get("is_oa", False)
-                                if not is_oa or not _has_valid_abstract(aii):
+                                if not is_oa or not _is_valid_abstract(aii):
                                     continue
 
                             yield work, label_included
