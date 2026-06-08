@@ -15,6 +15,8 @@ from synergy_dataset.base import download_raw_dataset
 from synergy_dataset.base import iter_datasets
 from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
+from synergy_dataset.extractors import _clean_str
+from synergy_dataset.extractors import _reconstruct_abstract
 from synergy_dataset.models import WorkModel
 from synergy_dataset.splits import TEST_SPLIT
 
@@ -87,6 +89,12 @@ def _write_review_metadata(datasets, counts, active_vars, output_path):
     """Write review_metadata.csv combining metadata.json and
     metadata_publication.json."""
     extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
+    # Publication metadata only has abstract_inverted_index (standard OpenAlex),
+    # not the SYNERGY-cleaned variant, so fall back to the original here.
+    if "abstract" in extractors:
+        extractors["abstract"] = lambda w: _clean_str(
+            _reconstruct_abstract(w.abstract_inverted_index)
+        )
     test_names = set(TEST_SPLIT)
     all_names = test_names | {d.name for d in datasets}
     split_lookup = {
