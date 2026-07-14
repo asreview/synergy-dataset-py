@@ -273,23 +273,37 @@ def build_dataset(argv):
         if args.dataset is not None:
             datasets = [Dataset(name) for name in args.dataset]
             for dataset in datasets:
-                n_records, n_included = _count_records(dataset)
-                counts[dataset.name] = (n_records, n_included)
-                if n_included < MIN_INCLUSIONS:
-                    continue
-                dataset.to_frame(args.vars).to_csv(
-                    Path(args.output, f"{dataset.name}.csv"), index=False
-                )
+                try:
+                    n_records, n_included = _count_records(dataset)
+                    counts[dataset.name] = (n_records, n_included)
+                    if n_included < MIN_INCLUSIONS:
+                        continue
+                    dataset.to_frame(args.vars).to_csv(
+                        Path(args.output, f"{dataset.name}.csv"), index=False
+                    )
+                except Exception:
+                    print(
+                        f"Error while processing dataset '{dataset.name}'",
+                        file=sys.stderr,
+                    )
+                    raise
         else:
             datasets = list(iter_datasets())
             for dataset in tqdm(datasets):
-                n_records, n_included = _count_records(dataset)
-                counts[dataset.name] = (n_records, n_included)
-                if n_included < MIN_INCLUSIONS:
-                    continue
-                dataset.to_frame(args.vars).to_csv(
-                    Path(args.output, f"{dataset.name}.csv"), index=False
-                )
+                try:
+                    n_records, n_included = _count_records(dataset)
+                    counts[dataset.name] = (n_records, n_included)
+                    if n_included < MIN_INCLUSIONS:
+                        continue
+                    dataset.to_frame(args.vars).to_csv(
+                        Path(args.output, f"{dataset.name}.csv"), index=False
+                    )
+                except Exception:
+                    print(
+                        f"Error while processing dataset '{dataset.name}'",
+                        file=sys.stderr,
+                    )
+                    raise
 
         metadata_path = Path(args.output) / "metadata"
         metadata_path.mkdir(exist_ok=True, parents=True)
