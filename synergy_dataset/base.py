@@ -56,22 +56,31 @@ def _get_path_raw_dataset(version=None):
             return Path(SYNERGY_ROOT, f"synergy-dataset-{version}")
 
 
+def _get_dataverse_doi(source_set=None):
+    """Return the dataverse persistentId DOI for the given SYNERGY set.
+
+    Args:
+        source_set (str, optional): "synergy+" or the classic set name.
+            Defaults to the SYNERGY_SET environment variable.
+    """
+    source_set = SYNERGY_SET if source_set is None else source_set
+    return "10.34894/DDCVCV" if source_set == "synergy+" else "10.34894/HE6NAQ"
+
+
 def _get_download_url(version=None, source="dataverse"):
     if version is None:
         version = SYNERGY_VERSION
 
-    # TODO: Set the URL to the correct version once the DOI for
-    # synergy+ is registered on dataverse.
     if SYNERGY_SET == "synergy+":
         if source == "dataverse":
-            return f"https://dataverse.nl/api/access/dataset/:persistentId/versions/{version}?persistentId=doi:PLACEHOLDER_SYNERGY_PLUS"  # noqa
+            return f"https://dataverse.nl/api/access/dataset/:persistentId/versions/{version}?persistentId=doi:{_get_dataverse_doi()}"  # noqa
         elif source == "github":
             return f"https://github.com/asreview/synergy-dataset-plus/archive/refs/tags/v{version}.zip"  # noqa
         else:
             raise ValueError("Unknown source")
     else:
         if source == "dataverse":
-            return f"https://dataverse.nl/api/access/dataset/:persistentId/versions/{version}?persistentId=doi:10.34894/HE6NAQ"  # noqa
+            return f"https://dataverse.nl/api/access/dataset/:persistentId/versions/{version}?persistentId=doi:{_get_dataverse_doi()}"  # noqa
         elif source == "github":
             return f"https://github.com/asreview/synergy-dataset/archive/refs/tags/v{version}.zip"  # noqa
         else:
@@ -133,13 +142,16 @@ def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
     """
 
     version = SYNERGY_VERSION if version is None else version
-    url_list = f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}?persistentId=doi:10.34894/HE6NAQ"  # noqa
+    url_list = f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}?persistentId=doi:{_get_dataverse_doi()}"  # noqa
 
     r = requests.get(url_list)
     file_list = r.json()["data"]["files"]
 
+    dir_prefix = (
+        "synergy-dataset-plus" if SYNERGY_SET == "synergy+" else "synergy-dataset-v1.0"
+    )
     files_subset = filter(
-        lambda x: x["directoryLabel"] == f"synergy-dataset-v1.0/{name}", file_list
+        lambda x: x["directoryLabel"] == f"{dir_prefix}/{name}", file_list
     )
     ids = ",".join(str(x["dataFile"]["id"]) for x in files_subset)
 
@@ -182,10 +194,9 @@ def download_reviews_csv(path=None, version=None):
         else Path(_get_path_raw_dataset(version=version)).parent
     )
 
-    doi = "PLACEHOLDER_SYNERGY_PLUS" if SYNERGY_SET == "synergy+" else "10.34894/HE6NAQ"
     url_list = (
         f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}"
-        f"?persistentId=doi:{doi}"
+        f"?persistentId=doi:{_get_dataverse_doi()}"
     )
 
     try:
