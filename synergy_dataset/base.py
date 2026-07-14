@@ -147,6 +147,92 @@ def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
     download_raw_dataset(url=url_download, path=path)
 
 
+def _get_reviews_csv_path(version=None):
+    """Path to reviews.csv, the review-level metadata file that lives at the
+    top level of the dataverse repository (a sibling of the per-dataset
+    folder returned by _get_path_raw_dataset(), not inside it)."""
+    return Path(_get_path_raw_dataset(version=version)).parent / "reviews.csv"
+
+
+def _reviews_csv_available(version=None):
+    """Check if reviews.csv is available locally."""
+    return _get_reviews_csv_path(version=version).exists()
+
+
+def download_reviews_csv(path=None, version=None):
+    """Download the top-level reviews.csv file from dataverse, without
+    downloading the full dataset zip.
+
+    This is a best-effort enrichment: if the file can't be found or
+    downloaded (e.g. the SYNERGY+ dataset isn't registered on dataverse
+    yet), a warning is printed and None is returned instead of raising.
+
+    Args:
+        path (str, optional): Directory to download reviews.csv into.
+            Defaults to the parent of _get_path_raw_dataset().
+        version (str, optional): The version of the dataset.
+
+    Returns:
+        Path or None: path to the downloaded reviews.csv, or None.
+    """
+    version = SYNERGY_VERSION if version is None else version
+    target_dir = (
+        Path(path)
+        if path is not None
+        else Path(_get_path_raw_dataset(version=version)).parent
+    )
+
+    doi = "PLACEHOLDER_SYNERGY_PLUS" if SYNERGY_SET == "synergy+" else "10.34894/HE6NAQ"
+    url_list = (
+        f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}"
+        f"?persistentId=doi:{doi}"
+    )
+
+    try:
+        r = requests.get(url_list)
+        r.raise_for_status()
+        file_list = r.json()["data"]["files"]
+    except (requests.RequestException, KeyError, ValueError) as e:
+        print(
+            f"Warning: could not fetch reviews.csv listing ({e}). "
+            "Continuing without additional review metadata columns."
+        )
+        return None
+
+    match = next(
+        (
+            f
+            for f in file_list
+            if f.get("dataFile", {}).get("filename") == "reviews.csv"
+        ),
+        None,
+    )
+    if match is None:
+        print(
+            "Warning: reviews.csv not found in the dataset repository. "
+            "Continuing without additional review metadata columns."
+        )
+        return None
+
+    try:
+        r = requests.get(
+            f"https://dataverse.nl/api/access/datafile/{match['dataFile']['id']}"
+        )
+        r.raise_for_status()
+    except requests.RequestException as e:
+        print(
+            f"Warning: failed to download reviews.csv ({e}). "
+            "Continuing without additional review metadata columns."
+        )
+        return None
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    out_path = target_dir / "reviews.csv"
+    with open(out_path, "wb") as f:
+        f.write(r.content)
+    return out_path
+
+
 def iter_datasets(path=None, version=None, split=None):
     """Iterate over the available datasets.
 

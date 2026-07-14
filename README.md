@@ -102,8 +102,9 @@ Each run of `synergy get` produces:
   - `data_doi` — DOI of the dataset deposit
   - `n_records` — number of works in the export
   - `n_records_included` — number of included works
-  - `eligibility_criteria` — the screening criteria text from `metadata.json`
+  - `eligibility_criteria` — the screening criteria text from `metadata.json` (overwritten by reviews.csv's `Eligibility Criteria`, if available)
   - All fields selected via `--vars` applied to the review publication itself (the OpenAlex work for the systematic review paper)
+  - If `reviews.csv` (review-level metadata: screening process, search sizes, review type, etc.) is available at the top level of the dataset repository, all of its columns are merged in, converted to snake_case (e.g. `Paper link` → `paper_link`, `Ti-ab screeners` → `ti_ab_screeners`, `Paper inclusion %` → `paper_inclusion_pct`). If `reviews.csv` can't be found or downloaded, `synergy get` prints a warning and continues without these extra columns.
 
 ### `synergy attribute` — attribution for datasets
 

@@ -3,7 +3,7 @@ import pytest
 from synergy_dataset import WORK_EXTRACTORS
 from synergy_dataset import Dataset
 from synergy_dataset import iter_datasets
-from synergy_dataset.base import _has_valid_abstract
+from synergy_dataset.base import _is_valid_abstract
 from synergy_dataset.base import download_raw_subset
 from synergy_dataset.extractors import _reconstruct_abstract
 
@@ -376,34 +376,34 @@ def test_reconstruct_abstract_empty():
 
 
 # ---------------------------------------------------------------------------
-# _has_valid_abstract
+# _is_valid_abstract
 # ---------------------------------------------------------------------------
 
 
-def test_has_valid_abstract_enough_words():
+def test_is_valid_abstract_enough_words():
     index = {f"word{i}": [i] for i in range(20)}
-    assert _has_valid_abstract(index) is True
+    assert _is_valid_abstract(index) is True
 
 
-def test_has_valid_abstract_enough_chars():
+def test_is_valid_abstract_enough_chars():
     # 8 long words — under 20 words but over 100 chars
     index = {f"averylongword{i}": [i] for i in range(8)}
     abstract = " ".join([f"averylongword{i}" for i in range(8)])
     assert len(abstract) >= 100
-    assert _has_valid_abstract(index) is True
+    assert _is_valid_abstract(index) is True
 
 
-def test_has_valid_abstract_too_short():
+def test_is_valid_abstract_too_short():
     index = {"hi": [0], "there": [1]}
-    assert _has_valid_abstract(index) is False
+    assert _is_valid_abstract(index) is False
 
 
-def test_has_valid_abstract_none():
-    assert _has_valid_abstract(None) is False
+def test_is_valid_abstract_none():
+    assert _is_valid_abstract(None) is False
 
 
-def test_has_valid_abstract_empty():
-    assert _has_valid_abstract({}) is False
+def test_is_valid_abstract_empty():
+    assert _is_valid_abstract({}) is False
 
 
 # ---------------------------------------------------------------------------

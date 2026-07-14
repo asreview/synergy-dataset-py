@@ -1,6 +1,7 @@
 import argparse
 import csv
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -11,7 +12,10 @@ from synergy_dataset._version import __version__
 from synergy_dataset.base import Dataset
 from synergy_dataset.base import _dataset_available
 from synergy_dataset.base import _get_path_raw_dataset
+from synergy_dataset.base import _get_reviews_csv_path
+from synergy_dataset.base import _reviews_csv_available
 from synergy_dataset.base import download_raw_dataset
+from synergy_dataset.base import download_reviews_csv
 from synergy_dataset.base import iter_datasets
 from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
@@ -85,9 +89,46 @@ def _count_records(dataset):
     return n_records, n_included
 
 
-def _write_review_metadata(datasets, counts, active_vars, output_path):
-    """Write review_metadata.csv combining metadata.json and
-    metadata_publication.json."""
+def _snake_case_header(header):
+    """Convert a reviews.csv column header to snake_case, e.g.
+    'Paper link' -> 'paper_link', 'Ti-ab screeners' -> 'ti_ab_screeners',
+    'Paper inclusion %' -> 'paper_inclusion_pct'."""
+    header = header.strip().replace("%", "pct")
+    header = re.sub(r"[^0-9a-zA-Z]+", "_", header)
+    return header.strip("_").lower()
+
+
+def _read_reviews_csv(path):
+    """Read reviews.csv into {dataset_key.lower(): {snake_case_col: value}}.
+
+    Returns {} if path is None. The join column (the one that snake-cases
+    to "key") is excluded from each row's value dict.
+    """
+    if path is None:
+        return {}
+
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        snake_fields = {fn: _snake_case_header(fn) for fn in reader.fieldnames}
+        key_field = next(fn for fn, s in snake_fields.items() if s == "key")
+
+        by_key = {}
+        for row in reader:
+            k = (row.get(key_field) or "").strip()
+            if not k:
+                continue
+            by_key[k.lower()] = {
+                snake_fields[fn]: v for fn, v in row.items() if fn != key_field
+            }
+
+    return by_key
+
+
+def _write_review_metadata(
+    datasets, counts, active_vars, output_path, reviews_csv_path=None
+):
+    """Write review_metadata.csv combining metadata.json,
+    metadata_publication.json, and (if available) reviews.csv."""
     extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
     # Publication metadata only has abstract_inverted_index (standard OpenAlex),
     # not the SYNERGY-cleaned variant, so fall back to the original here.
@@ -109,6 +150,14 @@ def _write_review_metadata(datasets, counts, active_vars, output_path):
         "n_records_included",
         "eligibility_criteria",
     ] + list(extractors)
+
+    reviews_by_key = _read_reviews_csv(reviews_csv_path)
+    if reviews_by_key:
+        # Union of reviews.csv columns (same set for every row). Columns
+        # that already exist (e.g. title, eligibility_criteria) are not
+        # duplicated -- they get overwritten in place below instead.
+        reviews_cols = list(next(iter(reviews_by_key.values())))
+        fieldnames = fieldnames + [c for c in reviews_cols if c not in fieldnames]
 
     out = output_path / "review_metadata.csv"
     with open(out, "w", newline="", encoding="utf-8") as f:
@@ -135,6 +184,13 @@ def _write_review_metadata(datasets, counts, active_vars, output_path):
                 ),
             }
             row.update(pub_fields)
+
+            review_extra = reviews_by_key.get(dataset.name.lower())
+            if review_extra:
+                # reviews.csv wins on any column collision (e.g. title,
+                # eligibility_criteria).
+                row.update(review_extra)
+
             writer.writerow(row)
 
 
@@ -238,8 +294,26 @@ def build_dataset(argv):
         metadata_path = Path(args.output) / "metadata"
         metadata_path.mkdir(exist_ok=True, parents=True)
 
+        if not _reviews_csv_available():
+            if os.getenv("SYNERGY_PATH"):
+                print(
+                    f"Warning: reviews.csv not found at {_get_reviews_csv_path()}. "
+                    "Continuing without additional review metadata columns."
+                )
+            else:
+                download_reviews_csv()
+        reviews_csv_path = (
+            _get_reviews_csv_path() if _reviews_csv_available() else None
+        )
+
         print("Writing review metadata")
-        _write_review_metadata(datasets, counts, active_vars, metadata_path)
+        _write_review_metadata(
+            datasets,
+            counts,
+            active_vars,
+            metadata_path,
+            reviews_csv_path=reviews_csv_path,
+        )
 
 
 def list_datasets(argv):
