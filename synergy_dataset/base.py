@@ -28,6 +28,10 @@ SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
 
 ABSTRACT_MIN_WORDS = 20
 ABSTRACT_MIN_CHARS = 100
+MIN_INCLUSIONS = 3
+
+# Process-level cache for Dataset.counts, keyed by dataset path.
+_counts_cache = {}
 
 
 def _is_valid_abstract(abstract_inverted_index):
@@ -356,8 +360,8 @@ def download_reviews_csv(path=None, version=None):
     return out_path
 
 
-def iter_datasets(path=None, version=None, split=None):
-    """Iterate over the available datasets.
+def iter_raw_datasets(path=None, version=None, split=None):
+    """Iterate over every downloaded dataset.
 
     Args:
         path (str, optional): Path to download the dataset to.
@@ -401,6 +405,46 @@ def iter_datasets(path=None, version=None, split=None):
         if split == "train" and name in test_names:
             continue
         yield Dataset(name, path=Path(dataset).parent)
+
+
+def _meets_min_inclusions(dataset, min_inclusions):
+    """Return True if ``dataset`` qualifies under ``min_inclusions``.
+
+    Only meaningful for SYNERGY+, where open-access/abstract filtering can
+    drop a dataset's usable inclusion count below its real total.
+    """
+    if SYNERGY_SET != "synergy+" or min_inclusions is None:
+        return True
+    return dataset.counts[1] >= min_inclusions
+
+
+def iter_datasets(path=None, version=None, split=None, min_inclusions=MIN_INCLUSIONS):
+    """Iterate over the datasets that ``synergy get`` would write.
+
+    A filtered wrapper around ``iter_raw_datasets()``: for SYNERGY+,
+    datasets with fewer than ``min_inclusions`` qualifying inclusions
+    (after the open-access/abstract filtering ``Dataset.iter()`` applies)
+    are skipped. This matches the ``synergy get`` CLI command's default
+    behavior.
+
+    Args:
+        path (str, optional): Path to download the dataset to.
+            Defaults to ~/.synergy_dataset_source.
+        version (str, optional): The version of the dataset to download.
+        split (str, optional): If provided, yield only datasets belonging to
+            the given split. One of ``"train"`` or ``"test"``. When omitted,
+            all datasets are yielded. Only available for SYNERGY+.
+        min_inclusions (int, optional): Minimum number of qualifying
+            inclusions a SYNERGY+ dataset must have to be yielded. Defaults
+            to ``MIN_INCLUSIONS`` (3). Pass ``None`` to disable filtering
+            and yield every dataset (same as ``iter_raw_datasets()``).
+
+    Yields:
+        Dataset: Dataset object
+    """
+    for dataset in iter_raw_datasets(path=path, version=version, split=split):
+        if _meets_min_inclusions(dataset, min_inclusions):
+            yield dataset
 
 
 class Dataset:
@@ -511,6 +555,36 @@ class Dataset:
                     }
 
         return self._labels
+
+    @property
+    def counts(self):
+        """Number of records and qualifying inclusions in this dataset.
+
+        For SYNERGY+, this reflects ``iter()``'s open-access/abstract
+        filtering, i.e. it counts only works that would actually be
+        yielded, computed by reading through the dataset once.
+
+        Returns:
+            tuple: ``(n_records, n_included)``.
+        """
+        if not hasattr(self, "_counts"):
+            cache_key = str(self._path)
+            if cache_key in _counts_cache:
+                self._counts = _counts_cache[cache_key]
+            elif SYNERGY_SET == "synergy+":
+                n_records, n_included = 0, 0
+                for _, label_included in self.iter(validate=False):
+                    n_records += 1
+                    n_included += label_included
+                self._counts = (n_records, n_included)
+                _counts_cache[cache_key] = self._counts
+            else:
+                n_records = len(self.labels)
+                n_included = sum(v["label_included"] for v in self.labels.values())
+                self._counts = (n_records, n_included)
+                _counts_cache[cache_key] = self._counts
+
+        return self._counts
 
     def iter(self, validate=True):
         """Iterate over the works in the dataset.

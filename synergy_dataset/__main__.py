@@ -9,13 +9,15 @@ from tabulate import tabulate
 from tqdm import tqdm
 
 from synergy_dataset._version import __version__
+from synergy_dataset.base import MIN_INCLUSIONS
 from synergy_dataset.base import Dataset
 from synergy_dataset.base import _ensure_dataset_downloaded
 from synergy_dataset.base import _get_path_raw_dataset
 from synergy_dataset.base import _get_reviews_csv_path
+from synergy_dataset.base import _meets_min_inclusions
 from synergy_dataset.base import _reviews_csv_available
 from synergy_dataset.base import download_reviews_csv
-from synergy_dataset.base import iter_datasets
+from synergy_dataset.base import iter_raw_datasets
 from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
 from synergy_dataset.extractors import _clean_str
@@ -38,8 +40,6 @@ in SYNERGY cannot be published as plaintext again. Therefore you can refer
 to the version of the SYNERGY dataset.
 
 Would you like to convert the inverted abstract to plaintext?"""
-
-MIN_INCLUSIONS = 3
 
 
 def main():
@@ -80,14 +80,6 @@ def info():
     parser.print_usage()
 
 
-def _count_records(dataset):
-    n_records, n_included = 0, 0
-    for _, label in dataset.iter(validate=False):
-        n_records += 1
-        n_included += label
-    return n_records, n_included
-
-
 def _snake_case_header(header):
     """Convert a reviews.csv column header to snake_case, e.g.
     'Paper link' -> 'paper_link', 'Ti-ab screeners' -> 'ti_ab_screeners',
@@ -124,7 +116,12 @@ def _read_reviews_csv(path):
 
 
 def _write_review_metadata(
-    datasets, counts, active_vars, output_path, reviews_csv_path=None
+    datasets,
+    counts,
+    active_vars,
+    output_path,
+    reviews_csv_path=None,
+    min_inclusions=MIN_INCLUSIONS,
 ):
     """Write review_metadata.csv combining metadata.json,
     metadata_publication.json, and (if available) reviews.csv."""
@@ -166,7 +163,7 @@ def _write_review_metadata(
         for dataset in datasets:
             n_records, n_included = counts[dataset.name]
 
-            if n_included < MIN_INCLUSIONS:
+            if not _meets_min_inclusions(dataset, min_inclusions):
                 continue
 
             pub_work = WorkModel.model_validate(dataset.metadata["publication"])
@@ -232,6 +229,15 @@ def build_dataset(argv):
         help="Ignore legal message.",
         action="store_true",
     )
+    parser.add_argument(
+        "--min-inclusions",
+        type=int,
+        default=MIN_INCLUSIONS,
+        help="Minimum number of included records (after abstract/OA "
+        f"filtering) a dataset needs to be written. Default {MIN_INCLUSIONS}. "
+        "Use 0 (or negative) to include every downloaded dataset. Only "
+        "applies to SYNERGY+; has no effect on classic SYNERGY.",
+    )
 
     args, _ = parser.parse_known_args()
 
@@ -272,9 +278,9 @@ def build_dataset(argv):
             datasets = [Dataset(name) for name in args.dataset]
             for dataset in datasets:
                 try:
-                    n_records, n_included = _count_records(dataset)
+                    n_records, n_included = dataset.counts
                     counts[dataset.name] = (n_records, n_included)
-                    if n_included < MIN_INCLUSIONS:
+                    if not _meets_min_inclusions(dataset, args.min_inclusions):
                         continue
                     dataset.to_frame(args.vars).to_csv(
                         Path(args.output, f"{dataset.name}.csv"), index=False
@@ -286,12 +292,12 @@ def build_dataset(argv):
                     )
                     raise
         else:
-            datasets = list(iter_datasets())
+            datasets = list(iter_raw_datasets())
             for dataset in tqdm(datasets):
                 try:
-                    n_records, n_included = _count_records(dataset)
+                    n_records, n_included = dataset.counts
                     counts[dataset.name] = (n_records, n_included)
-                    if n_included < MIN_INCLUSIONS:
+                    if not _meets_min_inclusions(dataset, args.min_inclusions):
                         continue
                     dataset.to_frame(args.vars).to_csv(
                         Path(args.output, f"{dataset.name}.csv"), index=False
@@ -325,6 +331,7 @@ def build_dataset(argv):
             active_vars,
             metadata_path,
             reviews_csv_path=reviews_csv_path,
+            min_inclusions=args.min_inclusions,
         )
 
 
@@ -354,7 +361,7 @@ def list_datasets(argv):
     n = 0
     n_incl = 0
 
-    for i, dataset in enumerate(iter_datasets()):
+    for i, dataset in enumerate(iter_raw_datasets()):
         n += dataset.metadata["data"]["n_records"]
         n_incl += dataset.metadata["data"]["n_records_included"]
 
@@ -510,7 +517,7 @@ def attribute_dataset(argv):
     citations = []
     collections = []
 
-    for dataset in iter_datasets():
+    for dataset in iter_raw_datasets():
         for a in dataset.metadata["publication"]["authorships"]:
             author = a["author"]
             if args.format == "markdown" and author.get("orcid"):
