@@ -114,7 +114,9 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
     if url is None:
         url = _get_download_url(version=version, source=source)
 
-    print(f"Downloading version {SYNERGY_VERSION} of the SYNERGY dataset...")
+    version = SYNERGY_VERSION if version is None else version
+    set_name = "SYNERGY+" if SYNERGY_SET == "synergy+" else "SYNERGY"
+    print(f"Downloading version {version} of the {set_name} dataset...")
 
     response = requests.get(url)
     response.raise_for_status()
