@@ -10,11 +10,10 @@ from tqdm import tqdm
 
 from synergy_dataset._version import __version__
 from synergy_dataset.base import Dataset
-from synergy_dataset.base import _dataset_available
+from synergy_dataset.base import _ensure_dataset_downloaded
 from synergy_dataset.base import _get_path_raw_dataset
 from synergy_dataset.base import _get_reviews_csv_path
 from synergy_dataset.base import _reviews_csv_available
-from synergy_dataset.base import download_raw_dataset
 from synergy_dataset.base import download_reviews_csv
 from synergy_dataset.base import iter_datasets
 from synergy_dataset.extractors import DEFAULT_VARS
@@ -247,9 +246,8 @@ def build_dataset(argv):
             print("Not a valid answer.")
             exit(1)
 
-    # download the dataset if not available
-    if not _dataset_available():
-        download_raw_dataset()
+    # download the dataset if not available (or resume/repair a partial one)
+    _ensure_dataset_downloaded()
 
     if args.legal:
         print("Building dataset")
@@ -348,9 +346,8 @@ def list_datasets(argv):
     )
     args = parser.parse_args(argv)
 
-    # download the dataset if not available
-    if not _dataset_available():
-        download_raw_dataset()
+    # download the dataset if not available (or resume/repair a partial one)
+    _ensure_dataset_downloaded()
 
     table_values = []
 
@@ -433,9 +430,8 @@ def show_dataset(argv):
     )
     args = parser.parse_args(argv)
 
-    # download the dataset if not available
-    if not _dataset_available():
-        download_raw_dataset()
+    # download the dataset if not available (or resume/repair a partial one)
+    _ensure_dataset_downloaded()
 
     d = Dataset(args.dataset)
 
@@ -503,9 +499,8 @@ def attribute_dataset(argv):
     )
     args = parser.parse_args(argv)
 
-    # download the dataset if not available
-    if not _dataset_available():
-        download_raw_dataset()
+    # download the dataset if not available (or resume/repair a partial one)
+    _ensure_dataset_downloaded()
 
     if args.format not in ("text", "markdown"):
         raise ValueError(f"Format not found '{args.format}'")

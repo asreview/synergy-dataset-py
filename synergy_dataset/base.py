@@ -102,15 +102,13 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
     """Download SYNERGY+ by fetching every file individually from dataverse.
 
     SYNERGY+ (~11GB) is too large for dataverse's bulk "download entire
-    dataset as zip" endpoint, which silently drops files once the bundle
-    crosses a server-side size limit (observed as exactly 10,000,000,000
-    bytes) instead of raising an error. Fetching each file through the
+    dataset as zip" endpoint. Fetching each file through the
     single-file access endpoint sidesteps that limit entirely.
 
     Files that already exist locally with the expected size are skipped, so
     an interrupted or partial download can simply be re-run to pick up where
-    it left off, similar to ``wget -r -nc``. Freshly downloaded files are
-    checked against dataverse's published SHA-1 checksum.
+    it left off. Freshly downloaded files are checked against dataverse's 
+    published SHA-1 checksum.
 
     Args:
         path (str, optional): Directory to download the dataset into.
@@ -128,19 +126,28 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
         if f.get("directoryLabel", "").startswith(f"{dir_prefix}/")
     ]
 
-    n_downloaded = 0
-    for f in tqdm(files, desc=f"Downloading version {version} of the SYNERGY+ dataset"):
+    # First check if we have missing files that need to be downloaded
+    to_download = []
+    for f in files:
         rel_dir = f["directoryLabel"][len(dir_prefix) + 1 :]
         data_file = f["dataFile"]
-        filename = data_file["filename"]
         expected_size = data_file.get("filesize")
-        checksum = data_file.get("checksum") or {}
-        local_file = target_root / rel_dir / filename
+        local_file = target_root / rel_dir / data_file["filename"]
 
         if local_file.exists() and (
             expected_size is None or local_file.stat().st_size == expected_size
         ):
             continue
+        to_download.append((rel_dir, data_file, local_file))
+
+    if not to_download:
+        return
+
+    for rel_dir, data_file, local_file in tqdm(
+        to_download, desc=f"Downloading version {version} of the SYNERGY+ dataset"
+    ):
+        filename = data_file["filename"]
+        checksum = data_file.get("checksum") or {}
 
         local_file.parent.mkdir(parents=True, exist_ok=True)
         with requests_cache.disabled():
@@ -156,9 +163,8 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
                     f"Checksum mismatch after downloading {rel_dir}/{filename}; "
                     "the download may be corrupted. Re-run to retry."
                 )
-        n_downloaded += 1
 
-    print(f"Downloaded {n_downloaded} file(s), {len(files)} total.")
+    print(f"Downloaded {len(to_download)} file(s), {len(files)} total.")
 
 
 def _get_download_url(version=None, source="dataverse"):
@@ -193,6 +199,19 @@ def _dataset_available(version=SYNERGY_VERSION):
     return _get_path_raw_dataset(version=version).exists()
 
 
+def _ensure_dataset_downloaded(version=None):
+    """Make sure the raw dataset is present and complete before it's used.
+
+    For the classic SYNERGY set this is the old "download once" check: if
+    the target folder exists, assume it's complete. For SYNERGY+ this is
+    handled by the download_raw_dataset_plus function.
+    """
+    if SYNERGY_SET == "synergy+":
+        download_raw_dataset(version=version)
+    elif not _dataset_available(version=version):
+        download_raw_dataset(version=version)
+
+
 def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="dataverse"):
     """Download the raw dataset from the SYNERGY repository.
 
@@ -205,12 +224,7 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
         source (str, optional): The source to download (github, dataverse).
         Default dataverse.
     """
-    # SYNERGY+ is too large for the bulk dataset-zip endpoint (see
-    # download_raw_dataset_plus). This only intercepts the default,
-    # whole-dataset download; explicit urls (e.g. from download_raw_subset,
-    # which fetches a handful of files well under the bulk endpoint's size
-    # limit) and the github source are unaffected and use the classic path
-    # below, same as the original (non-plus) SYNERGY dataset.
+    # SYNERGY+ is too large for the DataverseNL bulk dataset-zip endpoint
     if url is None and source == "dataverse" and SYNERGY_SET == "synergy+":
         download_raw_dataset_plus(path=path, version=version)
         return
@@ -371,10 +385,8 @@ def iter_datasets(path=None, version=None, split=None):
 
     version = SYNERGY_VERSION if version is None else version
 
-    if path is None and not _dataset_available():
-        download_raw_dataset(version=version)
-        path = _get_path_raw_dataset(version=version)
-    elif path is None and _dataset_available():
+    if path is None:
+        _ensure_dataset_downloaded(version=version)
         path = _get_path_raw_dataset(version=version)
     else:
         path = Path(path, f"synergy-dataset-{version}")
