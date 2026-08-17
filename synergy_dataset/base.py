@@ -1,5 +1,6 @@
 import csv
 import glob
+import hashlib
 import json
 import os
 import zipfile
@@ -67,6 +68,100 @@ def _get_dataverse_doi(source_set=None):
     return "10.34894/DDCVCV" if source_set == "synergy+" else "10.34894/HE6NAQ"
 
 
+def _get_dataverse_file_list(version=None):
+    """Fetch the file listing (name, directory, size, checksum) for the
+    current SYNERGY_SET's dataverse dataset version.
+
+    Args:
+        version (str, optional): The version of the dataset.
+
+    Returns:
+        list: The ``data.files`` array from the dataverse API response.
+    """
+    version = SYNERGY_VERSION if version is None else version
+    url_list = (
+        f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}"
+        f"?persistentId=doi:{_get_dataverse_doi()}"
+    )
+    r = requests.get(url_list)
+    r.raise_for_status()
+    return r.json()["data"]["files"]
+
+
+def _sha1_matches(path, expected_hex):
+    """Return True if the SHA-1 checksum of the file at path matches."""
+    h = hashlib.sha1()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest() == expected_hex.lower()
+
+
+def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
+    """Download SYNERGY+ by fetching every file individually from dataverse.
+
+    SYNERGY+ (~11GB) is too large for dataverse's bulk "download entire
+    dataset as zip" endpoint, which silently drops files once the bundle
+    crosses a server-side size limit (observed as exactly 10,000,000,000
+    bytes) instead of raising an error. Fetching each file through the
+    single-file access endpoint sidesteps that limit entirely.
+
+    Files that already exist locally with the expected size are skipped, so
+    an interrupted or partial download can simply be re-run to pick up where
+    it left off, similar to ``wget -r -nc``. Freshly downloaded files are
+    checked against dataverse's published SHA-1 checksum.
+
+    Args:
+        path (str, optional): Directory to download the dataset into.
+            Defaults to ~/.synergy_dataset_source.
+        version (str, optional): The version of the dataset to download.
+    """
+    version = SYNERGY_VERSION if version is None else version
+    print(f"Downloading version {version} of the SYNERGY+ dataset...")
+
+    dir_prefix = "synergy-dataset-plus"
+    target_root = Path(path, dir_prefix)
+    file_list = _get_dataverse_file_list(version=version)
+    files = [
+        f
+        for f in file_list
+        if f.get("directoryLabel", "").startswith(f"{dir_prefix}/")
+    ]
+
+    n_downloaded = 0
+    for i, f in enumerate(files, start=1):
+        rel_dir = f["directoryLabel"][len(dir_prefix) + 1 :]
+        data_file = f["dataFile"]
+        filename = data_file["filename"]
+        expected_size = data_file.get("filesize")
+        checksum = data_file.get("checksum") or {}
+        local_file = target_root / rel_dir / filename
+
+        if local_file.exists() and (
+            expected_size is None or local_file.stat().st_size == expected_size
+        ):
+            continue
+
+        print(f"  [{i}/{len(files)}] {rel_dir}/{filename}")
+        local_file.parent.mkdir(parents=True, exist_ok=True)
+        with requests_cache.disabled():
+            r = requests.get(
+                f"https://dataverse.nl/api/access/datafile/{data_file['id']}"
+            )
+        r.raise_for_status()
+        local_file.write_bytes(r.content)
+
+        if checksum.get("type") == "SHA-1" and checksum.get("value"):
+            if not _sha1_matches(local_file, checksum["value"]):
+                raise RuntimeError(
+                    f"Checksum mismatch after downloading {rel_dir}/{filename}; "
+                    "the download may be corrupted. Re-run to retry."
+                )
+        n_downloaded += 1
+
+    print(f"Downloaded {n_downloaded} file(s), {len(files)} total.")
+
+
 def _get_download_url(version=None, source="dataverse"):
     if version is None:
         version = SYNERGY_VERSION
@@ -111,6 +206,16 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
         source (str, optional): The source to download (github, dataverse).
         Default dataverse.
     """
+    # SYNERGY+ is too large for the bulk dataset-zip endpoint (see
+    # download_raw_dataset_plus). This only intercepts the default,
+    # whole-dataset download; explicit urls (e.g. from download_raw_subset,
+    # which fetches a handful of files well under the bulk endpoint's size
+    # limit) and the github source are unaffected and use the classic path
+    # below, same as the original (non-plus) SYNERGY dataset.
+    if url is None and source == "dataverse" and SYNERGY_SET == "synergy+":
+        download_raw_dataset_plus(path=path, version=version)
+        return
+
     if url is None:
         url = _get_download_url(version=version, source=source)
 
@@ -145,10 +250,7 @@ def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
     """
 
     version = SYNERGY_VERSION if version is None else version
-    url_list = f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}?persistentId=doi:{_get_dataverse_doi()}"  # noqa
-
-    r = requests.get(url_list)
-    file_list = r.json()["data"]["files"]
+    file_list = _get_dataverse_file_list(version=version)
 
     dir_prefix = (
         "synergy-dataset-plus" if SYNERGY_SET == "synergy+" else "synergy-dataset-v1.0"
@@ -197,15 +299,8 @@ def download_reviews_csv(path=None, version=None):
         else Path(_get_path_raw_dataset(version=version)).parent
     )
 
-    url_list = (
-        f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}"
-        f"?persistentId=doi:{_get_dataverse_doi()}"
-    )
-
     try:
-        r = requests.get(url_list)
-        r.raise_for_status()
-        file_list = r.json()["data"]["files"]
+        file_list = _get_dataverse_file_list(version=version)
     except (requests.RequestException, KeyError, ValueError) as e:
         print(
             f"Warning: could not fetch reviews.csv listing ({e}). "
