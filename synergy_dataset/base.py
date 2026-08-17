@@ -12,6 +12,7 @@ import pandas as pd
 import requests
 import requests_cache
 from pyalex import Work
+from tqdm import tqdm
 
 from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
@@ -117,7 +118,6 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
         version (str, optional): The version of the dataset to download.
     """
     version = SYNERGY_VERSION if version is None else version
-    print(f"Downloading version {version} of the SYNERGY+ dataset...")
 
     dir_prefix = "synergy-dataset-plus"
     target_root = Path(path, dir_prefix)
@@ -129,7 +129,7 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
     ]
 
     n_downloaded = 0
-    for i, f in enumerate(files, start=1):
+    for f in tqdm(files, desc=f"Downloading version {version} of the SYNERGY+ dataset"):
         rel_dir = f["directoryLabel"][len(dir_prefix) + 1 :]
         data_file = f["dataFile"]
         filename = data_file["filename"]
@@ -142,7 +142,6 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
         ):
             continue
 
-        print(f"  [{i}/{len(files)}] {rel_dir}/{filename}")
         local_file.parent.mkdir(parents=True, exist_ok=True)
         with requests_cache.disabled():
             r = requests.get(
