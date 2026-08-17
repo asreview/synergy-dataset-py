@@ -51,7 +51,7 @@ def _get_path_raw_dataset(version=None):
     else:
         version = SYNERGY_VERSION if version is None else version
         if SYNERGY_SET == "synergy+":
-            return Path(SYNERGY_ROOT, f"synergy-plus-dataset-{version}")
+            return Path(SYNERGY_ROOT, "synergy-dataset-plus")
         else:
             return Path(SYNERGY_ROOT, f"synergy-dataset-{version}")
 
@@ -75,7 +75,7 @@ def _get_download_url(version=None, source="dataverse"):
         if source == "dataverse":
             return f"https://dataverse.nl/api/access/dataset/:persistentId/versions/{version}?persistentId=doi:{_get_dataverse_doi()}"  # noqa
         elif source == "github":
-            return f"https://github.com/asreview/synergy-dataset-plus/archive/refs/tags/v{version}.zip"  # noqa
+            return f"https://github.com/asreview/synergy-dataset/archive/refs/tags/synergy_plus_v{version}.zip"  # noqa
         else:
             raise ValueError("Unknown source")
     else:
@@ -118,7 +118,8 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
     set_name = "SYNERGY+" if SYNERGY_SET == "synergy+" else "SYNERGY"
     print(f"Downloading version {version} of the {set_name} dataset...")
 
-    response = requests.get(url)
+    with requests_cache.disabled():
+        response = requests.get(url)
     response.raise_for_status()
 
     release_zip = zipfile.ZipFile(BytesIO(response.content))
@@ -228,9 +229,10 @@ def download_reviews_csv(path=None, version=None):
         return None
 
     try:
-        r = requests.get(
-            f"https://dataverse.nl/api/access/datafile/{match['dataFile']['id']}"
-        )
+        with requests_cache.disabled():
+            r = requests.get(
+                f"https://dataverse.nl/api/access/datafile/{match['dataFile']['id']}"
+            )
         r.raise_for_status()
     except requests.RequestException as e:
         print(
