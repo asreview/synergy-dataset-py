@@ -3,6 +3,7 @@ import glob
 import hashlib
 import json
 import os
+import shutil
 import zipfile
 from collections import Counter
 from io import BytesIO
@@ -247,10 +248,18 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
     release_zip = zipfile.ZipFile(BytesIO(response.content))
     release_zip.extractall(path=path)
 
-    # hack because the version on dataverse has a v prefix
     for f in Path(path).iterdir():
         if f.is_dir() and f.name.startswith("synergy-dataset-v"):
-            os.rename(f, str(f).replace("synergy-dataset-v", "synergy-dataset-"))
+            target = Path(str(f).replace("synergy-dataset-v", "synergy-dataset-"))
+            if target.exists():
+                for child in f.iterdir():
+                    dest = target / child.name
+                    if dest.exists():
+                        shutil.rmtree(dest) if dest.is_dir() else dest.unlink()
+                    shutil.move(str(child), str(dest))
+                f.rmdir()
+            else:
+                os.rename(f, target)
 
 
 def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
@@ -273,7 +282,7 @@ def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
         "synergy-dataset-plus" if SYNERGY_SET == "synergy+" else "synergy-dataset-v1.0"
     )
     files_subset = filter(
-        lambda x: x["directoryLabel"] == f"{dir_prefix}/{name}", file_list
+        lambda x: x.get("directoryLabel", "") == f"{dir_prefix}/{name}", file_list
     )
     ids = ",".join(str(x["dataFile"]["id"]) for x in files_subset)
 
@@ -393,7 +402,12 @@ def iter_raw_datasets(path=None, version=None, split=None):
         _ensure_dataset_downloaded(version=version)
         path = _get_path_raw_dataset(version=version)
     else:
-        path = Path(path, f"synergy-dataset-{version}")
+        dir_name = (
+            "synergy-dataset-plus"
+            if SYNERGY_SET == "synergy+"
+            else f"synergy-dataset-{version}"
+        )
+        path = Path(path, dir_name)
 
     for dataset in sorted(
         glob.glob(str(Path(path, "*", "metadata.json"))),
