@@ -1,3 +1,6 @@
+"""Tests for the classic synergy dataset.
+"""
+
 import pytest
 
 from synergy_dataset import WORK_EXTRACTORS
@@ -7,7 +10,10 @@ from synergy_dataset.base import _is_valid_abstract
 from synergy_dataset.base import download_raw_subset
 from synergy_dataset.extractors import _reconstruct_abstract
 
-DATASETS = ["Walker_2018", "van_de_Schoot_2018"]
+DATASETS = ["Chou_2003", "Oud_2018"]
+
+# Used for single-dataset tests below.
+SINGLE_TEST_DATASET = "Oud_2018"
 
 
 # ---------------------------------------------------------------------------
@@ -26,15 +32,27 @@ def enable_synergy():
     _base.SYNERGY_SET = original
 
 
+@pytest.fixture(scope="module")
+def real_root(tmp_path_factory, enable_synergy):
+    """Download DATASETS once for the whole module and return the root dir
+    iter_datasets(path=...) expects (i.e. the parent of synergy-dataset-1.0).
+    """
+    root = tmp_path_factory.mktemp("synergy_real")
+    for name in DATASETS:
+        download_raw_subset(name, path=root)
+    return root
+
+
 @pytest.fixture(scope="module", params=DATASETS)
-def dataset(request):
-    return Dataset(request.param)
+def dataset(request, real_root):
+    path = real_root / "synergy-dataset-1.0" / request.param
+    return Dataset(request.param, path=path)
 
 
 @pytest.fixture(scope="module")
-def vds():
-    """van_de_Schoot_2018 — used for single-dataset tests."""
-    return Dataset("van_de_Schoot_2018")
+def single_test_dataset(real_root):
+    path = real_root / "synergy-dataset-1.0" / SINGLE_TEST_DATASET
+    return Dataset(SINGLE_TEST_DATASET, path=path)
 
 
 # ---------------------------------------------------------------------------
@@ -42,12 +60,12 @@ def vds():
 # ---------------------------------------------------------------------------
 
 
-def test_iter_datasets_returns_multiple():
-    assert len(list(iter_datasets())) > 1
+def test_iter_datasets_returns_multiple(real_root):
+    assert len(list(iter_datasets(path=real_root))) > 1
 
 
-def test_iter_datasets_yields_dataset_instances():
-    for d in iter_datasets():
+def test_iter_datasets_yields_dataset_instances(real_root):
+    for d in iter_datasets(path=real_root):
         assert isinstance(d, Dataset)
         break
 
@@ -103,22 +121,22 @@ def test_labels_abstract_label_is_int_or_none(dataset):
 # ---------------------------------------------------------------------------
 
 
-def test_iter_validate_true_yields_workmodel(vds):
+def test_iter_validate_true_yields_workmodel(single_test_dataset):
     from synergy_dataset.models import WorkModel
 
-    work, _ = next(vds.iter(validate=True))
+    work, _ = next(single_test_dataset.iter(validate=True))
     assert isinstance(work, WorkModel)
 
 
-def test_iter_validate_false_yields_pyalex_work(vds):
+def test_iter_validate_false_yields_pyalex_work(single_test_dataset):
     from pyalex import Work
 
-    work, _ = next(vds.iter(validate=False))
+    work, _ = next(single_test_dataset.iter(validate=False))
     assert isinstance(work, Work)
 
 
-def test_iter_label_is_int(vds):
-    _, label = next(vds.iter())
+def test_iter_label_is_int(single_test_dataset):
+    _, label = next(single_test_dataset.iter())
     assert isinstance(label, int)
     assert label in (0, 1)
 
@@ -128,14 +146,13 @@ def test_iter_count_matches_labels(dataset):
     assert n_iter == len(dataset.labels)
 
 
-
 # ---------------------------------------------------------------------------
 # to_dict()
 # ---------------------------------------------------------------------------
 
 
-def test_to_dict_returns_dict(vds):
-    assert isinstance(vds.to_dict(), dict)
+def test_to_dict_returns_dict(single_test_dataset):
+    assert isinstance(single_test_dataset.to_dict(), dict)
 
 
 def test_to_dict_keys_match_labels(dataset):
@@ -143,21 +160,21 @@ def test_to_dict_keys_match_labels(dataset):
     assert list(result.keys()) == list(dataset.labels.keys())
 
 
-def test_to_dict_default_columns(vds):
-    record = next(iter(vds.to_dict().values()))
+def test_to_dict_default_columns(single_test_dataset):
+    record = next(iter(single_test_dataset.to_dict().values()))
     for col in ("doi", "pmid", "lens_id", "title", "abstract", "label_included"):
         assert col in record
 
 
-def test_to_dict_no_extra_columns_by_default(vds):
-    record = next(iter(vds.to_dict().values()))
+def test_to_dict_no_extra_columns_by_default(single_test_dataset):
+    record = next(iter(single_test_dataset.to_dict().values()))
     expected = {"doi", "pmid", "lens_id", "title", "abstract", "label_included"}
     # label_abstract_included is allowed as an optional addition
     assert set(record.keys()) - {"label_abstract_included"} == expected
 
 
-def test_to_dict_custom_vars(vds):
-    result = vds.to_dict(vars=["cited_by_count", "type"])
+def test_to_dict_custom_vars(single_test_dataset):
+    result = single_test_dataset.to_dict(vars=["cited_by_count", "type"])
     record = next(iter(result.values()))
     assert "cited_by_count" in record
     assert "type" in record
@@ -165,34 +182,34 @@ def test_to_dict_custom_vars(vds):
     assert "abstract" not in record
 
 
-def test_to_dict_custom_vars_still_has_base_fields(vds):
-    result = vds.to_dict(vars=["cited_by_count"])
+def test_to_dict_custom_vars_still_has_base_fields(single_test_dataset):
+    result = single_test_dataset.to_dict(vars=["cited_by_count"])
     record = next(iter(result.values()))
     assert "doi" in record
     assert "label_included" in record
 
 
-def test_to_dict_extended_has_all_extractors(vds):
-    result = vds.to_dict(vars="extended")
+def test_to_dict_extended_has_all_extractors(single_test_dataset):
+    result = single_test_dataset.to_dict(vars="extended")
     record = next(iter(result.values()))
     for field in WORK_EXTRACTORS:
         assert field in record
 
 
-def test_to_dict_unknown_var_raises(vds):
+def test_to_dict_unknown_var_raises(single_test_dataset):
     with pytest.raises(ValueError, match="Unknown vars"):
-        vds.to_dict(vars=["nonexistent_field"])
+        single_test_dataset.to_dict(vars=["nonexistent_field"])
 
 
-def test_to_dict_title_no_newlines(vds):
-    for record in vds.to_dict().values():
+def test_to_dict_title_no_newlines(single_test_dataset):
+    for record in single_test_dataset.to_dict().values():
         if record and record.get("title"):
             assert "\n" not in record["title"]
             assert "\r" not in record["title"]
 
 
-def test_to_dict_abstract_no_newlines(vds):
-    for record in vds.to_dict().values():
+def test_to_dict_abstract_no_newlines(single_test_dataset):
+    for record in single_test_dataset.to_dict().values():
         if record and record.get("abstract"):
             assert "\n" not in record["abstract"]
             assert "\r" not in record["abstract"]
@@ -204,16 +221,16 @@ def test_to_dict_label_included_is_binary(dataset):
             assert record["label_included"] in (0, 1)
 
 
-def test_to_dict_author_names_is_list(vds):
-    result = vds.to_dict(vars=["author_names"])
+def test_to_dict_author_names_is_list(single_test_dataset):
+    result = single_test_dataset.to_dict(vars=["author_names"])
     for record in result.values():
         if record and record["author_names"] is not None:
             assert isinstance(record["author_names"], list)
             break
 
 
-def test_to_dict_topics_is_list(vds):
-    result = vds.to_dict(vars=["topics"])
+def test_to_dict_topics_is_list(single_test_dataset):
+    result = single_test_dataset.to_dict(vars=["topics"])
     for record in result.values():
         if record and record["topics"] is not None:
             assert isinstance(record["topics"], list)
@@ -225,21 +242,21 @@ def test_to_dict_topics_is_list(vds):
 # ---------------------------------------------------------------------------
 
 
-def test_to_frame_returns_dataframe(vds):
+def test_to_frame_returns_dataframe(single_test_dataset):
     pd = pytest.importorskip("pandas")
-    df = vds.to_frame()
+    df = single_test_dataset.to_frame()
     assert isinstance(df, pd.DataFrame)
 
 
-def test_to_frame_has_openalex_id_column(vds):
+def test_to_frame_has_openalex_id_column(single_test_dataset):
     pytest.importorskip("pandas")
-    df = vds.to_frame()
+    df = single_test_dataset.to_frame()
     assert "openalex_id" in df.columns
 
 
-def test_to_frame_default_columns(vds):
+def test_to_frame_default_columns(single_test_dataset):
     pytest.importorskip("pandas")
-    df = vds.to_frame()
+    df = single_test_dataset.to_frame()
     for col in ("doi", "pmid", "lens_id", "title", "abstract", "label_included"):
         assert col in df.columns
 
@@ -250,16 +267,16 @@ def test_to_frame_shape_matches_labels(dataset):
     assert len(df) == len(dataset.labels)
 
 
-def test_to_frame_extended_has_all_extractor_columns(vds):
+def test_to_frame_extended_has_all_extractor_columns(single_test_dataset):
     pytest.importorskip("pandas")
-    df = vds.to_frame(vars="extended")
+    df = single_test_dataset.to_frame(vars="extended")
     for field in WORK_EXTRACTORS:
         assert field in df.columns
 
 
-def test_to_frame_custom_vars(vds):
+def test_to_frame_custom_vars(single_test_dataset):
     pytest.importorskip("pandas")
-    df = vds.to_frame(vars=["cited_by_count", "journal_name"])
+    df = single_test_dataset.to_frame(vars=["cited_by_count", "journal_name"])
     assert "cited_by_count" in df.columns
     assert "journal_name" in df.columns
     assert "title" not in df.columns
@@ -322,10 +339,10 @@ def test_summary_primary_topics_is_list(dataset):
 # ---------------------------------------------------------------------------
 
 
-def test_workmodel_from_real_work(vds):
+def test_workmodel_from_real_work(single_test_dataset):
     from synergy_dataset.models import WorkModel
 
-    work, _ = next(vds.iter(validate=True))
+    work, _ = next(single_test_dataset.iter(validate=True))
     assert isinstance(work, WorkModel)
 
 
@@ -344,7 +361,7 @@ def test_workmodel_synergy_fields():
     assert w.language_fasttext == "en"
 
 
-def test_workmodel_all_optional(vds):
+def test_workmodel_all_optional(single_test_dataset):
     """An empty dict must not raise — all fields are Optional."""
     from synergy_dataset.models import WorkModel
 
@@ -411,11 +428,11 @@ def test_is_valid_abstract_empty():
 # ---------------------------------------------------------------------------
 
 
-def test_all_extractors_run_without_error(vds):
+def test_all_extractors_run_without_error(single_test_dataset):
     """Every registered extractor must not raise on a real work."""
     from synergy_dataset.models import WorkModel
 
-    work, _ = next(vds.iter(validate=True))
+    work, _ = next(single_test_dataset.iter(validate=True))
     assert isinstance(work, WorkModel)
     for name, extractor in WORK_EXTRACTORS.items():
         try:
@@ -424,10 +441,10 @@ def test_all_extractors_run_without_error(vds):
             pytest.fail(f"Extractor {name!r} raised {exc!r}")
 
 
-def test_all_extractors_usable_as_vars(vds):
+def test_all_extractors_usable_as_vars(single_test_dataset):
     """Each extractor name must be accepted by to_dict without error."""
     for name in WORK_EXTRACTORS:
-        vds.to_dict(vars=[name])
+        single_test_dataset.to_dict(vars=[name])
 
 
 # ---------------------------------------------------------------------------
