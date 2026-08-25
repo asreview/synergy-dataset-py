@@ -26,7 +26,7 @@ from synergy_dataset.extractors import _reconstruct_abstract
 from synergy_dataset.splits import TEST_SPLIT
 
 SYNERGY_VERSION = (
-    os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "1.0"
+    os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "2.0"
 )
 SYNERGY_PATH = os.getenv("SYNERGY_PATH")
 SYNERGY_PLUS = "synergy_plus"
