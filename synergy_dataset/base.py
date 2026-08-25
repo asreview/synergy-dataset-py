@@ -28,8 +28,7 @@ from synergy_dataset.splits import TEST_SPLIT
 SYNERGY_PATH = os.getenv("SYNERGY_PATH")
 SYNERGY_PLUS = "synergy_plus"
 SYNERGY_SET = os.getenv("SYNERGY_SET", SYNERGY_PLUS)
-_DEFAULT_SYNERGY_VERSION = "2.0" if SYNERGY_SET == SYNERGY_PLUS else "1.0"
-SYNERGY_VERSION = os.getenv("SYNERGY_VERSION") or _DEFAULT_SYNERGY_VERSION
+SYNERGY_VERSION = os.getenv("SYNERGY_VERSION")
 SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
 
 ABSTRACT_MIN_WORDS = 20
@@ -69,13 +68,27 @@ DATAVERSE_MAX_RETRIES = 3
 DATAVERSE_RETRY_BACKOFF = 2  # seconds; doubled on each subsequent retry
 
 
+def _resolve_version(version=None):
+    """Resolve the dataset version to use.
+
+    Precedence: an explicit ``version`` argument, then the ``SYNERGY_VERSION``
+    env var override, then a default based on the *current* ``SYNERGY_SET``
+    ("2.0" for synergy_plus, "1.0" for the classic set).
+    """
+    if version is not None:
+        return version
+    if SYNERGY_VERSION:
+        return SYNERGY_VERSION
+    return "2.0" if SYNERGY_SET == SYNERGY_PLUS else "1.0"
+
+
 def _get_path_raw_dataset(version=None):
     if SYNERGY_PATH and SYNERGY_PATH == "development":
         return Path(__file__).parent.parent.parent / "synergy-release"
     elif SYNERGY_PATH:
         return Path(SYNERGY_PATH).expanduser()
     else:
-        version = SYNERGY_VERSION if version is None else version
+        version = _resolve_version(version)
         if SYNERGY_SET == SYNERGY_PLUS:
             return Path(SYNERGY_ROOT, "synergy-dataset-plus")
         else:
@@ -103,7 +116,7 @@ def _get_dataverse_file_list(version=None):
     Returns:
         list: The ``data.files`` array from the dataverse API response.
     """
-    version = SYNERGY_VERSION if version is None else version
+    version = _resolve_version(version)
     url_list = (
         f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}"
         f"?persistentId=doi:{_get_dataverse_doi()}"
@@ -173,7 +186,7 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
             Defaults to ~/.synergy_dataset_source.
         version (str, optional): The version of the dataset to download.
     """
-    version = SYNERGY_VERSION if version is None else version
+    version = _resolve_version(version)
 
     dir_prefix = "synergy-dataset-plus"
     target_root = Path(path, dir_prefix)
@@ -222,8 +235,7 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
 
 
 def _get_download_url(version=None, source="dataverse"):
-    if version is None:
-        version = SYNERGY_VERSION
+    version = _resolve_version(version)
 
     if SYNERGY_SET == SYNERGY_PLUS:
         if source == "dataverse":
@@ -241,7 +253,7 @@ def _get_download_url(version=None, source="dataverse"):
             raise ValueError("Unknown source")
 
 
-def _dataset_available(version=SYNERGY_VERSION):
+def _dataset_available(version=None):
     """Check if the dataset is available.
 
     Args:
@@ -250,7 +262,7 @@ def _dataset_available(version=SYNERGY_VERSION):
     Returns:
         bool: True if the dataset is available
     """
-    return _get_path_raw_dataset(version=version).exists()
+    return _get_path_raw_dataset(version=_resolve_version(version)).exists()
 
 
 def _ensure_dataset_downloaded(version=None):
@@ -286,7 +298,7 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
     if url is None:
         url = _get_download_url(version=version, source=source)
 
-    version = SYNERGY_VERSION if version is None else version
+    version = _resolve_version(version)
     set_name = "SYNERGY+" if SYNERGY_SET == SYNERGY_PLUS else "SYNERGY"
     print(f"Downloading version {version} of the {set_name} dataset...")
 
@@ -322,7 +334,7 @@ def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
         Default dataverse.
     """
 
-    version = SYNERGY_VERSION if version is None else version
+    version = _resolve_version(version)
     file_list = _get_dataverse_file_list(version=version)
 
     dir_prefix = (
@@ -367,7 +379,7 @@ def download_reviews_csv(path=None, version=None):
     Returns:
         Path or None: path to the downloaded reviews.csv, or None.
     """
-    version = SYNERGY_VERSION if version is None else version
+    version = _resolve_version(version)
     target_dir = (
         Path(path)
         if path is not None
@@ -443,7 +455,7 @@ def iter_raw_datasets(path=None, version=None, split=None):
     else:
         test_names = None
 
-    version = SYNERGY_VERSION if version is None else version
+    version = _resolve_version(version)
 
     if path is None:
         _ensure_dataset_downloaded(version=version)
