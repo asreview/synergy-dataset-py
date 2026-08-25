@@ -1,17 +1,15 @@
-"""Tests for the classic synergy dataset."""
+"""Tests for the synergy+ dataset."""
 
 import pytest
 
 from synergy_dataset import WORK_EXTRACTORS
 from synergy_dataset import Dataset
 from synergy_dataset import iter_datasets
-from synergy_dataset.base import _is_valid_abstract
 from synergy_dataset.base import download_raw_subset
-from synergy_dataset.extractors import _reconstruct_abstract
 
 DATASETS = ["Chou_2003", "Oud_2018"]
 
-# Used for single-dataset tests below.
+# Used for single-dataset tests
 SINGLE_TEST_DATASET = "Oud_2018"
 
 
@@ -21,22 +19,22 @@ SINGLE_TEST_DATASET = "Oud_2018"
 
 
 @pytest.fixture(scope="module", autouse=True)
-def enable_synergy():
-    """Ensure the active dataset is 'synergy' for the entire module."""
+def enable_synergy_plus():
+    """Switch the active dataset to synergy+ for the entire module."""
     import synergy_dataset.base as _base
 
     original = _base.SYNERGY_SET
-    _base.SYNERGY_SET = "synergy"
+    _base.SYNERGY_SET = _base.SYNERGY_PLUS
     yield
     _base.SYNERGY_SET = original
 
 
 @pytest.fixture(scope="module")
-def real_root(tmp_path_factory, enable_synergy):
+def real_root(tmp_path_factory, enable_synergy_plus):
     """Download DATASETS once for the whole module and return the root dir
-    iter_datasets(path=...) expects (i.e. the parent of synergy-dataset-1.0).
+    iter_datasets(path=...) expects (i.e. the parent of synergy-dataset-plus).
     """
-    root = tmp_path_factory.mktemp("synergy_real")
+    root = tmp_path_factory.mktemp("synergy_plus_real")
     for name in DATASETS:
         download_raw_subset(name, path=root)
     return root
@@ -44,13 +42,13 @@ def real_root(tmp_path_factory, enable_synergy):
 
 @pytest.fixture(scope="module", params=DATASETS)
 def dataset(request, real_root):
-    path = real_root / "synergy-dataset-1.0" / request.param
+    path = real_root / "synergy-dataset-plus" / request.param
     return Dataset(request.param, path=path)
 
 
 @pytest.fixture(scope="module")
 def single_test_dataset(real_root):
-    path = real_root / "synergy-dataset-1.0" / SINGLE_TEST_DATASET
+    path = real_root / "synergy-dataset-plus" / SINGLE_TEST_DATASET
     return Dataset(SINGLE_TEST_DATASET, path=path)
 
 
@@ -60,18 +58,41 @@ def single_test_dataset(real_root):
 
 
 def test_iter_datasets_returns_multiple(real_root):
-    assert len(list(iter_datasets(path=real_root))) > 1
+    # min_inclusions=None: Chou_2003 only has 1 qualifying inclusion, below
+    # the default MIN_INCLUSIONS of 3, so it would otherwise be filtered out
+    assert len(list(iter_datasets(path=real_root, min_inclusions=None))) > 1
 
 
 def test_iter_datasets_yields_dataset_instances(real_root):
-    for d in iter_datasets(path=real_root):
+    for d in iter_datasets(path=real_root, min_inclusions=None):
         assert isinstance(d, Dataset)
         break
 
 
-def test_iter_datasets_split_raises_for_synergy():
-    with pytest.raises(ValueError, match="SYNERGY\\+"):
-        next(iter_datasets(split="test"))
+def test_iter_datasets_split_invalid_raises():
+    with pytest.raises(ValueError, match="split must be"):
+        next(iter_datasets(split="val"))
+
+
+def test_iter_datasets_train_test_are_disjoint(real_root):
+    from synergy_dataset.splits import TEST_SPLIT
+
+    if not TEST_SPLIT:
+        pytest.skip("TEST_SPLIT not yet populated")
+    train = {d.name for d in iter_datasets(path=real_root, split="train")}
+    test = {d.name for d in iter_datasets(path=real_root, split="test")}
+    assert train.isdisjoint(test)
+
+
+def test_iter_datasets_train_test_cover_all(real_root):
+    from synergy_dataset.splits import TEST_SPLIT
+
+    if not TEST_SPLIT:
+        pytest.skip("TEST_SPLIT not yet populated")
+    all_names = {d.name for d in iter_datasets(path=real_root)}
+    train = {d.name for d in iter_datasets(path=real_root, split="train")}
+    test = {d.name for d in iter_datasets(path=real_root, split="test")}
+    assert train | test == all_names
 
 
 # ---------------------------------------------------------------------------
@@ -133,9 +154,20 @@ def test_iter_label_is_int(single_test_dataset):
     assert label in (0, 1)
 
 
-def test_iter_count_matches_labels(dataset):
+def test_iter_count_matches_counts(dataset):
+    """For synergy+, iter() only yields the open-access/valid-abstract
+    subset."""
     n_iter = sum(1 for _ in dataset.iter())
-    assert n_iter == len(dataset.labels)
+    assert n_iter == dataset.counts[0]
+
+
+def test_iter_only_yields_open_access_valid_abstract(dataset):
+    from synergy_dataset.base import _is_valid_abstract
+
+    for work, _ in dataset.iter():
+        open_access = work.get("open_access") or {}
+        assert open_access.get("is_oa")
+        assert _is_valid_abstract(work.get("abstract_inverted_index_cleaned"))
 
 
 # ---------------------------------------------------------------------------
@@ -147,9 +179,12 @@ def test_to_dict_returns_dict(single_test_dataset):
     assert isinstance(single_test_dataset.to_dict(), dict)
 
 
-def test_to_dict_keys_match_labels(dataset):
+def test_to_dict_keys_match_iter_ids(dataset):
+    """For synergy+, to_dict()'s keys are the iter()-filtered subset of
+    labels, not every label."""
     result = dataset.to_dict()
-    assert list(result.keys()) == list(dataset.labels.keys())
+    iter_ids = {w["id"].lower() for w, _ in dataset.iter()}
+    assert set(result.keys()) == iter_ids
 
 
 def test_to_dict_default_columns(single_test_dataset):
@@ -161,7 +196,6 @@ def test_to_dict_default_columns(single_test_dataset):
 def test_to_dict_no_extra_columns_by_default(single_test_dataset):
     record = next(iter(single_test_dataset.to_dict().values()))
     expected = {"doi", "lens_id", "title", "abstract", "label_included"}
-    # label_abstract_included is allowed as an optional addition
     assert set(record.keys()) - {"label_abstract_included"} == expected
 
 
@@ -253,10 +287,10 @@ def test_to_frame_default_columns(single_test_dataset):
         assert col in df.columns
 
 
-def test_to_frame_shape_matches_labels(dataset):
+def test_to_frame_shape_matches_counts(dataset):
     pytest.importorskip("pandas")
     df = dataset.to_frame()
-    assert len(df) == len(dataset.labels)
+    assert len(df) == dataset.counts[0]
 
 
 def test_to_frame_extended_has_all_extractor_columns(single_test_dataset):
@@ -303,6 +337,9 @@ def test_summary_name(dataset):
 
 
 def test_summary_counts(dataset):
+    """summary()'s n_total/n_included/n_excluded come straight from
+    labels.csv -- unlike iter()/to_dict()/to_frame(), they are not affected
+    by the synergy+ open-access/abstract filter."""
     s = dataset.summary()
     assert s["n_total"] == len(dataset.labels)
     assert s["n_included"] + s["n_excluded"] == s["n_total"]
@@ -327,66 +364,11 @@ def test_summary_primary_topics_is_list(dataset):
 
 
 # ---------------------------------------------------------------------------
-# _reconstruct_abstract
-# ---------------------------------------------------------------------------
-
-
-def test_reconstruct_abstract_basic():
-    index = {"Hello": [0], "world": [1]}
-    assert _reconstruct_abstract(index) == "Hello world"
-
-
-def test_reconstruct_abstract_ordering():
-    index = {"second": [1], "first": [0], "third": [2]}
-    assert _reconstruct_abstract(index) == "first second third"
-
-
-def test_reconstruct_abstract_none():
-    assert _reconstruct_abstract(None) is None
-
-
-def test_reconstruct_abstract_empty():
-    assert _reconstruct_abstract({}) is None
-
-
-# ---------------------------------------------------------------------------
-# _is_valid_abstract
-# ---------------------------------------------------------------------------
-
-
-def test_is_valid_abstract_enough_words():
-    index = {f"word{i}": [i] for i in range(20)}
-    assert _is_valid_abstract(index) is True
-
-
-def test_is_valid_abstract_enough_chars():
-    # 8 long words — under 20 words but over 100 chars
-    index = {f"averylongword{i}": [i] for i in range(8)}
-    abstract = " ".join([f"averylongword{i}" for i in range(8)])
-    assert len(abstract) >= 100
-    assert _is_valid_abstract(index) is True
-
-
-def test_is_valid_abstract_too_short():
-    index = {"hi": [0], "there": [1]}
-    assert _is_valid_abstract(index) is False
-
-
-def test_is_valid_abstract_none():
-    assert _is_valid_abstract(None) is False
-
-
-def test_is_valid_abstract_empty():
-    assert _is_valid_abstract({}) is False
-
-
-# ---------------------------------------------------------------------------
 # WORK_EXTRACTORS
 # ---------------------------------------------------------------------------
 
 
 def test_all_extractors_run_without_error(single_test_dataset):
-    """Every registered extractor must not raise on a real work."""
     work, _ = next(single_test_dataset.iter())
     for name, extractor in WORK_EXTRACTORS.items():
         try:
@@ -396,7 +378,6 @@ def test_all_extractors_run_without_error(single_test_dataset):
 
 
 def test_all_extractors_usable_as_vars(single_test_dataset):
-    """Each extractor name must be accepted by to_dict without error."""
     for name in WORK_EXTRACTORS:
         single_test_dataset.to_dict(vars=[name])
 
@@ -410,7 +391,11 @@ def test_all_extractors_usable_as_vars(single_test_dataset):
 def test_download_single_dataset(dataset_name, tmpdir):
     download_raw_subset(dataset_name, path=tmpdir)
 
-    datasets = iter_datasets(path=tmpdir)
+    # min_inclusions=None: Chou_2003 doesn't clear the default
+    # MIN_INCLUSIONS threshold on its own (see module docstring), which
+    # isn't what this test is about -- it's checking that a single
+    # downloaded dataset is discoverable and loads correctly.
+    datasets = iter_datasets(path=tmpdir, min_inclusions=None)
     d = next(datasets)
 
     assert isinstance(d, Dataset)
