@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import shutil
+import time
 import zipfile
 from collections import Counter
 from io import BytesIO
@@ -51,8 +52,22 @@ def _is_valid_abstract(abstract_inverted_index):
     )
 
 
+def _is_json_response(response):
+    """Only cache genuine API responses.
+
+    dataverse.nl occasionally returns an HTML error page  with a 200 status.
+    Without this filter that page would get cached.
+    """
+    return "json" in response.headers.get("Content-Type", "")
+
+
 # Initialize requests-cache with a 24-hour expiration
-requests_cache.install_cache("synergy_cache", expire_after=24 * 60 * 60)
+requests_cache.install_cache(
+    "synergy_cache", expire_after=24 * 60 * 60, filter_fn=_is_json_response
+)
+
+DATAVERSE_MAX_RETRIES = 3
+DATAVERSE_RETRY_BACKOFF = 2  # seconds; doubled on each subsequent retry
 
 
 def _get_path_raw_dataset(version=None):
@@ -94,9 +109,18 @@ def _get_dataverse_file_list(version=None):
         f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}"
         f"?persistentId=doi:{_get_dataverse_doi()}"
     )
-    r = requests.get(url_list)
-    r.raise_for_status()
-    return r.json()["data"]["files"]
+
+    last_error = None
+    for attempt in range(DATAVERSE_MAX_RETRIES):
+        r = requests.get(url_list)
+        r.raise_for_status()
+        try:
+            return r.json()["data"]["files"]
+        except requests.exceptions.JSONDecodeError as e:
+            last_error = e
+            if attempt < DATAVERSE_MAX_RETRIES - 1:
+                time.sleep(DATAVERSE_RETRY_BACKOFF * (attempt + 1))
+    raise last_error
 
 
 def _sha1_matches(path, expected_hex):
@@ -106,6 +130,31 @@ def _sha1_matches(path, expected_hex):
         for chunk in iter(lambda: fh.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest() == expected_hex.lower()
+
+
+def _fetch_binary_with_retry(url):
+    """GET a binary file (zip/csv/etc.) with retry-on-transient-failure.
+
+    Returns:
+        requests.Response: the validated response.
+    """
+    last_error = None
+    for attempt in range(DATAVERSE_MAX_RETRIES):
+        try:
+            with requests_cache.disabled():
+                r = requests.get(url)
+            r.raise_for_status()
+            if r.headers.get("Content-Type", "").startswith("text/html"):
+                raise requests.exceptions.RequestException(
+                    f"Expected a file download but got an HTML response "
+                    f"(likely a transient error page) from {url}"
+                )
+            return r
+        except requests.RequestException as e:
+            last_error = e
+            if attempt < DATAVERSE_MAX_RETRIES - 1:
+                time.sleep(DATAVERSE_RETRY_BACKOFF * (attempt + 1))
+    raise last_error
 
 
 def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
@@ -158,11 +207,9 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
         checksum = data_file.get("checksum") or {}
 
         local_file.parent.mkdir(parents=True, exist_ok=True)
-        with requests_cache.disabled():
-            r = requests.get(
-                f"https://dataverse.nl/api/access/datafile/{data_file['id']}"
-            )
-        r.raise_for_status()
+        r = _fetch_binary_with_retry(
+            f"https://dataverse.nl/api/access/datafile/{data_file['id']}"
+        )
         local_file.write_bytes(r.content)
 
         if checksum.get("type") == "SHA-1" and checksum.get("value"):
@@ -244,9 +291,7 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
     set_name = "SYNERGY+" if SYNERGY_SET == SYNERGY_PLUS else "SYNERGY"
     print(f"Downloading version {version} of the {set_name} dataset...")
 
-    with requests_cache.disabled():
-        response = requests.get(url)
-    response.raise_for_status()
+    response = _fetch_binary_with_retry(url)
 
     release_zip = zipfile.ZipFile(BytesIO(response.content))
     release_zip.extractall(path=path)
@@ -355,11 +400,9 @@ def download_reviews_csv(path=None, version=None):
         return None
 
     try:
-        with requests_cache.disabled():
-            r = requests.get(
-                f"https://dataverse.nl/api/access/datafile/{match['dataFile']['id']}"
-            )
-        r.raise_for_status()
+        r = _fetch_binary_with_retry(
+            f"https://dataverse.nl/api/access/datafile/{match['dataFile']['id']}"
+        )
     except requests.RequestException as e:
         print(
             f"Warning: failed to download reviews.csv ({e}). "
