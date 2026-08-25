@@ -25,12 +25,11 @@ from synergy_dataset.extractors import WORK_EXTRACTORS
 from synergy_dataset.extractors import _reconstruct_abstract
 from synergy_dataset.splits import TEST_SPLIT
 
-SYNERGY_VERSION = (
-    os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "2.0"
-)
 SYNERGY_PATH = os.getenv("SYNERGY_PATH")
 SYNERGY_PLUS = "synergy_plus"
 SYNERGY_SET = os.getenv("SYNERGY_SET", SYNERGY_PLUS)
+_DEFAULT_SYNERGY_VERSION = "2.0" if SYNERGY_SET == SYNERGY_PLUS else "1.0"
+SYNERGY_VERSION = os.getenv("SYNERGY_VERSION") or _DEFAULT_SYNERGY_VERSION
 SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
 
 ABSTRACT_MIN_WORDS = 20
