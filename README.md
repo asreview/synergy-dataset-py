@@ -1,4 +1,4 @@
-# synergy-dataset
+# Python package for the SYNERGY+ and SYNERGY datasets
 
 ![PyPI](https://img.shields.io/pypi/v/synergy-dataset)
 
@@ -6,17 +6,29 @@ Python package for the [SYNERGY](https://github.com/asreview/synergy-dataset) an
 
 ## Installation
 
-Requires Python 3.8 or later.
+Requires Python 3.10 or later.
 
 ```sh
 pip install synergy-dataset
 ```
 
+## Quick Start
+
+```sh
+synergy get
+```
+
+This downloads and exports the SYNERGY+ dataset as CSV files.
+
+For the full set of CLI options and Python API, see the technical reference below. For an introduction to the SYNERGY project and example notebooks (including a Python getting-started notebook), see the main repository: [asreview/synergy-dataset](https://github.com/asreview/synergy-dataset). Jupyter notebooks can be found in its [`examples`](https://github.com/asreview/synergy-dataset/tree/master/examples) folder.
+
+Prefer working with the dataset in Python? Jump to the [Python API](#python-api).
+
 ## Dataset variants
 
 | Variable | Value | Dataset |
 |---|---|---|
-| `SYNERGY_SET` | `synergy+` (default) | SYNERGY+ |
+| `SYNERGY_SET` | `synergy_plus` (default) | SYNERGY+ |
 | `SYNERGY_SET` | `synergy` | Original SYNERGY |
 
 Set `SYNERGY_SET=synergy` in your environment to use the original SYNERGY dataset.
@@ -64,22 +76,28 @@ For SYNERGY+, only open-access works with a valid abstract (≥ 20 words or ≥ 
 Export all datasets with default fields:
 
 ```sh
-synergy get -o ./output --ignore-legal
+synergy get -o ./output
 ```
 
 Export with extended OpenAlex fields:
 
 ```sh
-synergy get -v extended --ignore-legal
+synergy get -v extended
 ```
 
 Export a single dataset with specific fields:
 
 ```sh
-synergy get -d Appenzeller-Herzog_2019 -v cited_by_count,publication_year --ignore-legal
+synergy get -d Appenzeller-Herzog_2019 -v cited_by_count,publication_year
 ```
 
-Available `--vars` fields (on top of the always-included `openalex_id`, `doi`, `pmid`, `lens_id`, `title`, `abstract`, `label_included`):
+Skip the abstract plaintext legal prompt (e.g. for non-interactive/CI use):
+
+```sh
+synergy get --ignore-legal
+```
+
+Available `--vars` fields (on top of the always-included `openalex_id`, `doi`, `lens_id`, `title`, `abstract`, `label_included`):
 
 ```
 publication_year  publication_date  type              language
@@ -144,8 +162,8 @@ from synergy_dataset import Dataset
 d = Dataset("Appenzeller-Herzog_2019")
 ```
 
-#### Export to DataFrame
-
+#### Export to pandas DataFrame
+This functionality requires pandas to be installed. Install with pandas with `pip install pandas`.
 ```python
 df = d.to_frame()                         # title + abstract
 df = d.to_frame(vars="extended")          # all OpenAlex fields
@@ -165,18 +183,8 @@ records = d.to_dict(vars="extended")
 
 ```python
 for work, label in d.iter():
-    print(work.title, label)
-
-# Skip Pydantic validation for speed
-for work, label in d.iter(validate=False):
     print(work["title"], label)
 ```
-
-`iter()` parameters:
-
-| Parameter | Default | Description |
-|---|---|---|
-| `validate` | `True` | Validate works against the OpenAlex Pydantic model |
 
 #### Dataset metadata and labels
 
@@ -193,7 +201,7 @@ print(d.summary())    # quick statistics
 
 | Variable | Default | Description |
 |---|---|---|
-| `SYNERGY_SET` | `synergy+` | Dataset variant: `synergy+` or `synergy` |
+| `SYNERGY_SET` | `synergy_plus` | Dataset variant: `synergy_plus` or `synergy` |
 | `SYNERGY_VERSION` | `1.0` | Dataset version to download |
 | `SYNERGY_PATH` | *(auto)* | Custom path to dataset; `development` for local dev |
 
@@ -205,5 +213,4 @@ print(d.summary())    # quick statistics
 
 ## Contact
 
-- SYNERGY: [github.com/asreview/synergy-dataset](https://github.com/asreview/synergy-dataset)
-- SYNERGY+: [github.com/asreview/synergy-dataset](https://github.com/asreview/synergy-dataset)
+See [https://github.com/asreview/synergy-dataset](https://github.com/asreview/synergy-dataset) for contact details.
