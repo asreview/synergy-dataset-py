@@ -121,17 +121,10 @@ def test_labels_abstract_label_is_int_or_none(dataset):
 # ---------------------------------------------------------------------------
 
 
-def test_iter_validate_true_yields_workmodel(single_test_dataset):
-    from synergy_dataset.models import WorkModel
-
-    work, _ = next(single_test_dataset.iter(validate=True))
-    assert isinstance(work, WorkModel)
-
-
-def test_iter_validate_false_yields_pyalex_work(single_test_dataset):
+def test_iter_yields_pyalex_work(single_test_dataset):
     from pyalex import Work
 
-    work, _ = next(single_test_dataset.iter(validate=False))
+    work, _ = next(single_test_dataset.iter())
     assert isinstance(work, Work)
 
 
@@ -162,13 +155,13 @@ def test_to_dict_keys_match_labels(dataset):
 
 def test_to_dict_default_columns(single_test_dataset):
     record = next(iter(single_test_dataset.to_dict().values()))
-    for col in ("doi", "pmid", "lens_id", "title", "abstract", "label_included"):
+    for col in ("doi", "lens_id", "title", "abstract", "label_included"):
         assert col in record
 
 
 def test_to_dict_no_extra_columns_by_default(single_test_dataset):
     record = next(iter(single_test_dataset.to_dict().values()))
-    expected = {"doi", "pmid", "lens_id", "title", "abstract", "label_included"}
+    expected = {"doi", "lens_id", "title", "abstract", "label_included"}
     # label_abstract_included is allowed as an optional addition
     assert set(record.keys()) - {"label_abstract_included"} == expected
 
@@ -257,7 +250,7 @@ def test_to_frame_has_openalex_id_column(single_test_dataset):
 def test_to_frame_default_columns(single_test_dataset):
     pytest.importorskip("pandas")
     df = single_test_dataset.to_frame()
-    for col in ("doi", "pmid", "lens_id", "title", "abstract", "label_included"):
+    for col in ("doi", "lens_id", "title", "abstract", "label_included"):
         assert col in df.columns
 
 
@@ -335,41 +328,6 @@ def test_summary_primary_topics_is_list(dataset):
 
 
 # ---------------------------------------------------------------------------
-# WorkModel (Pydantic validation)
-# ---------------------------------------------------------------------------
-
-
-def test_workmodel_from_real_work(single_test_dataset):
-    from synergy_dataset.models import WorkModel
-
-    work, _ = next(single_test_dataset.iter(validate=True))
-    assert isinstance(work, WorkModel)
-
-
-def test_workmodel_extra_fields_allowed():
-    from synergy_dataset.models import WorkModel
-
-    w = WorkModel(id="https://openalex.org/W123", unknown_future_field="value")
-    assert w.id == "https://openalex.org/W123"
-
-
-def test_workmodel_synergy_fields():
-    from synergy_dataset.models import WorkModel
-
-    w = WorkModel(abstract_original="Plain text.", language_fasttext="en")
-    assert w.abstract_original == "Plain text."
-    assert w.language_fasttext == "en"
-
-
-def test_workmodel_all_optional(single_test_dataset):
-    """An empty dict must not raise — all fields are Optional."""
-    from synergy_dataset.models import WorkModel
-
-    w = WorkModel()
-    assert w.id is None
-
-
-# ---------------------------------------------------------------------------
 # _reconstruct_abstract
 # ---------------------------------------------------------------------------
 
@@ -430,10 +388,7 @@ def test_is_valid_abstract_empty():
 
 def test_all_extractors_run_without_error(single_test_dataset):
     """Every registered extractor must not raise on a real work."""
-    from synergy_dataset.models import WorkModel
-
-    work, _ = next(single_test_dataset.iter(validate=True))
-    assert isinstance(work, WorkModel)
+    work, _ = next(single_test_dataset.iter())
     for name, extractor in WORK_EXTRACTORS.items():
         try:
             extractor(work)

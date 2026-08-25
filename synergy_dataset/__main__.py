@@ -22,7 +22,6 @@ from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
 from synergy_dataset.extractors import _clean_str
 from synergy_dataset.extractors import _reconstruct_abstract
-from synergy_dataset.models import WorkModel
 from synergy_dataset.splits import TEST_SPLIT
 
 LEGAL_NOTE = """
@@ -130,7 +129,7 @@ def _write_review_metadata(
     # not the SYNERGY-cleaned variant, so fall back to the original here.
     if "abstract" in extractors:
         extractors["abstract"] = lambda w: _clean_str(
-            _reconstruct_abstract(w.abstract_inverted_index)
+            _reconstruct_abstract(w.get("abstract_inverted_index"))
         )
     test_names = set(TEST_SPLIT)
     all_names = test_names | {d.name for d in datasets}
@@ -166,7 +165,7 @@ def _write_review_metadata(
             if not _meets_min_inclusions(dataset, min_inclusions):
                 continue
 
-            pub_work = WorkModel.model_validate(dataset.metadata["publication"])
+            pub_work = dataset.metadata["publication"]
             pub_fields = {field: fn(pub_work) for field, fn in extractors.items()}
 
             row = {
@@ -206,7 +205,7 @@ def build_dataset(argv):
         "--vars",
         type=lambda x: x if x == "extended" else x.split(","),
         help="The variables to include. "
-        'Always included: "openalex_id", "doi", "pmid", "lens_id", "title",'
+        'Always included: "openalex_id", "doi", "lens_id", "title",'
         ' "abstract", "label_included", and "label_abstract_included"'
         '\n"extended": Include each OpenAlex field.'
         "\nThe following additional variables are available: {}".format(

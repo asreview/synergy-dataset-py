@@ -7,7 +7,6 @@ from synergy_dataset.base import download_raw_subset
 from synergy_dataset.base import iter_datasets
 from synergy_dataset.base import iter_raw_datasets
 from synergy_dataset.extractors import WORK_EXTRACTORS
-from synergy_dataset.models import WorkModel
 from synergy_dataset.splits import TEST_SPLIT
 
 __all__ = [
@@ -19,5 +18,4 @@ __all__ = [
     "iter_datasets",
     "iter_raw_datasets",
     "TEST_SPLIT",
-    "WorkModel",
 ]

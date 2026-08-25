@@ -25,7 +25,7 @@ def enable_synergy_plus():
     import synergy_dataset.base as _base
 
     original = _base.SYNERGY_SET
-    _base.SYNERGY_SET = "synergy+"
+    _base.SYNERGY_SET = _base.SYNERGY_PLUS
     yield
     _base.SYNERGY_SET = original
 
@@ -142,17 +142,10 @@ def test_labels_abstract_label_is_int_or_none(dataset):
 # ---------------------------------------------------------------------------
 
 
-def test_iter_validate_true_yields_workmodel(single_test_dataset):
-    from synergy_dataset.models import WorkModel
-
-    work, _ = next(single_test_dataset.iter(validate=True))
-    assert isinstance(work, WorkModel)
-
-
-def test_iter_validate_false_yields_pyalex_work(single_test_dataset):
+def test_iter_yields_pyalex_work(single_test_dataset):
     from pyalex import Work
 
-    work, _ = next(single_test_dataset.iter(validate=False))
+    work, _ = next(single_test_dataset.iter())
     assert isinstance(work, Work)
 
 
@@ -172,9 +165,10 @@ def test_iter_count_matches_counts(dataset):
 def test_iter_only_yields_open_access_valid_abstract(dataset):
     from synergy_dataset.base import _is_valid_abstract
 
-    for work, _ in dataset.iter(validate=True):
-        assert work.open_access and work.open_access.is_oa
-        assert _is_valid_abstract(work.abstract_inverted_index_cleaned)
+    for work, _ in dataset.iter():
+        open_access = work.get("open_access") or {}
+        assert open_access.get("is_oa")
+        assert _is_valid_abstract(work.get("abstract_inverted_index_cleaned"))
 
 
 # ---------------------------------------------------------------------------
@@ -190,19 +184,19 @@ def test_to_dict_keys_match_iter_ids(dataset):
     """For synergy+, to_dict()'s keys are the iter()-filtered subset of
     labels, not every label."""
     result = dataset.to_dict()
-    iter_ids = {w.id.lower() for w, _ in dataset.iter()}
+    iter_ids = {w["id"].lower() for w, _ in dataset.iter()}
     assert set(result.keys()) == iter_ids
 
 
 def test_to_dict_default_columns(single_test_dataset):
     record = next(iter(single_test_dataset.to_dict().values()))
-    for col in ("doi", "pmid", "lens_id", "title", "abstract", "label_included"):
+    for col in ("doi", "lens_id", "title", "abstract", "label_included"):
         assert col in record
 
 
 def test_to_dict_no_extra_columns_by_default(single_test_dataset):
     record = next(iter(single_test_dataset.to_dict().values()))
-    expected = {"doi", "pmid", "lens_id", "title", "abstract", "label_included"}
+    expected = {"doi", "lens_id", "title", "abstract", "label_included"}
     assert set(record.keys()) - {"label_abstract_included"} == expected
 
 
@@ -290,7 +284,7 @@ def test_to_frame_has_openalex_id_column(single_test_dataset):
 def test_to_frame_default_columns(single_test_dataset):
     pytest.importorskip("pandas")
     df = single_test_dataset.to_frame()
-    for col in ("doi", "pmid", "lens_id", "title", "abstract", "label_included"):
+    for col in ("doi", "lens_id", "title", "abstract", "label_included"):
         assert col in df.columns
 
 
@@ -371,27 +365,12 @@ def test_summary_primary_topics_is_list(dataset):
 
 
 # ---------------------------------------------------------------------------
-# WorkModel (Pydantic validation)
-# ---------------------------------------------------------------------------
-
-
-def test_workmodel_from_real_work(single_test_dataset):
-    from synergy_dataset.models import WorkModel
-
-    work, _ = next(single_test_dataset.iter(validate=True))
-    assert isinstance(work, WorkModel)
-
-
-# ---------------------------------------------------------------------------
 # WORK_EXTRACTORS
 # ---------------------------------------------------------------------------
 
 
 def test_all_extractors_run_without_error(single_test_dataset):
-    from synergy_dataset.models import WorkModel
-
-    work, _ = next(single_test_dataset.iter(validate=True))
-    assert isinstance(work, WorkModel)
+    work, _ = next(single_test_dataset.iter())
     for name, extractor in WORK_EXTRACTORS.items():
         try:
             extractor(work)

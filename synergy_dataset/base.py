@@ -9,11 +9,15 @@ from collections import Counter
 from io import BytesIO
 from pathlib import Path
 
-import pandas as pd
 import requests
 import requests_cache
 from pyalex import Work
 from tqdm import tqdm
+
+try:
+    import pandas as pd
+except ImportError:
+    pass
 
 from synergy_dataset.extractors import DEFAULT_VARS
 from synergy_dataset.extractors import WORK_EXTRACTORS
@@ -24,7 +28,8 @@ SYNERGY_VERSION = (
     os.getenv("SYNERGY_VERSION") if os.getenv("SYNERGY_VERSION") else "1.0"
 )
 SYNERGY_PATH = os.getenv("SYNERGY_PATH")
-SYNERGY_SET = os.getenv("SYNERGY_SET", "synergy+")
+SYNERGY_PLUS = "synergy_plus"
+SYNERGY_SET = os.getenv("SYNERGY_SET", SYNERGY_PLUS)
 SYNERGY_ROOT = Path("~", ".synergy_dataset_source").expanduser()
 
 ABSTRACT_MIN_WORDS = 20
@@ -57,7 +62,7 @@ def _get_path_raw_dataset(version=None):
         return Path(SYNERGY_PATH).expanduser()
     else:
         version = SYNERGY_VERSION if version is None else version
-        if SYNERGY_SET == "synergy+":
+        if SYNERGY_SET == SYNERGY_PLUS:
             return Path(SYNERGY_ROOT, "synergy-dataset-plus")
         else:
             return Path(SYNERGY_ROOT, f"synergy-dataset-{version}")
@@ -67,11 +72,11 @@ def _get_dataverse_doi(source_set=None):
     """Return the dataverse persistentId DOI for the given SYNERGY set.
 
     Args:
-        source_set (str, optional): "synergy+" or the classic set name.
+        source_set (str, optional): "synergy_plus" or the classic set name.
             Defaults to the SYNERGY_SET environment variable.
     """
     source_set = SYNERGY_SET if source_set is None else source_set
-    return "10.34894/DDCVCV" if source_set == "synergy+" else "10.34894/HE6NAQ"
+    return "10.34894/DDCVCV" if source_set == SYNERGY_PLUS else "10.34894/HE6NAQ"
 
 
 def _get_dataverse_file_list(version=None):
@@ -176,7 +181,7 @@ def _get_download_url(version=None, source="dataverse"):
     if version is None:
         version = SYNERGY_VERSION
 
-    if SYNERGY_SET == "synergy+":
+    if SYNERGY_SET == SYNERGY_PLUS:
         if source == "dataverse":
             return f"https://dataverse.nl/api/access/dataset/:persistentId/versions/{version}?persistentId=doi:{_get_dataverse_doi()}"  # noqa
         elif source == "github":
@@ -211,7 +216,7 @@ def _ensure_dataset_downloaded(version=None):
     the target folder exists, assume it's complete. For SYNERGY+ this is
     handled by the download_raw_dataset_plus function.
     """
-    if SYNERGY_SET == "synergy+":
+    if SYNERGY_SET == SYNERGY_PLUS:
         download_raw_dataset(version=version)
     elif not _dataset_available(version=version):
         download_raw_dataset(version=version)
@@ -230,7 +235,7 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
         Default dataverse.
     """
     # SYNERGY+ is too large for the DataverseNL bulk dataset-zip endpoint
-    if url is None and source == "dataverse" and SYNERGY_SET == "synergy+":
+    if url is None and source == "dataverse" and SYNERGY_SET == SYNERGY_PLUS:
         download_raw_dataset_plus(path=path, version=version)
         return
 
@@ -238,7 +243,7 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
         url = _get_download_url(version=version, source=source)
 
     version = SYNERGY_VERSION if version is None else version
-    set_name = "SYNERGY+" if SYNERGY_SET == "synergy+" else "SYNERGY"
+    set_name = "SYNERGY+" if SYNERGY_SET == SYNERGY_PLUS else "SYNERGY"
     print(f"Downloading version {version} of the {set_name} dataset...")
 
     with requests_cache.disabled():
@@ -279,7 +284,7 @@ def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
     file_list = _get_dataverse_file_list(version=version)
 
     dir_prefix = (
-        "synergy-dataset-plus" if SYNERGY_SET == "synergy+" else "synergy-dataset-v1.0"
+        "synergy-dataset-plus" if SYNERGY_SET == SYNERGY_PLUS else "synergy-dataset-v1.0"
     )
     files_subset = filter(
         lambda x: x.get("directoryLabel", "") == f"{dir_prefix}/{name}", file_list
@@ -384,10 +389,10 @@ def iter_raw_datasets(path=None, version=None, split=None):
         Dataset: Dataset object
     """
     if split is not None:
-        if SYNERGY_SET != "synergy+":
+        if SYNERGY_SET != SYNERGY_PLUS:
             raise ValueError(
                 "Train/test splits are only available for SYNERGY+. "
-                "Set the SYNERGY_SET environment variable to 'synergy+' "
+                "Set the SYNERGY_SET environment variable to 'synergy_plus' "
                 "or omit the split argument."
             )
         if split not in ("train", "test"):
@@ -404,7 +409,7 @@ def iter_raw_datasets(path=None, version=None, split=None):
     else:
         dir_name = (
             "synergy-dataset-plus"
-            if SYNERGY_SET == "synergy+"
+            if SYNERGY_SET == SYNERGY_PLUS
             else f"synergy-dataset-{version}"
         )
         path = Path(path, dir_name)
@@ -427,7 +432,7 @@ def _meets_min_inclusions(dataset, min_inclusions):
     Only meaningful for SYNERGY+, where open-access/abstract filtering can
     drop a dataset's usable inclusion count below its real total.
     """
-    if SYNERGY_SET != "synergy+" or min_inclusions is None:
+    if SYNERGY_SET != SYNERGY_PLUS or min_inclusions is None:
         return True
     return dataset.counts[1] >= min_inclusions
 
@@ -585,9 +590,9 @@ class Dataset:
             cache_key = str(self._path)
             if cache_key in _counts_cache:
                 self._counts = _counts_cache[cache_key]
-            elif SYNERGY_SET == "synergy+":
+            elif SYNERGY_SET == SYNERGY_PLUS:
                 n_records, n_included = 0, 0
-                for _, label_included in self.iter(validate=False):
+                for _, label_included in self.iter():
                     n_records += 1
                     n_included += label_included
                 self._counts = (n_records, n_included)
@@ -600,27 +605,17 @@ class Dataset:
 
         return self._counts
 
-    def iter(self, validate=True):
+    def iter(self):
         """Iterate over the works in the dataset.
 
         For SYNERGY+, only open-access works with a valid abstract
         (>= 20 words or >= 100 characters) are yielded.
 
-        Args:
-            validate (bool): If True (default), validate each work against
-                the OpenAlex schema using Pydantic. Set to False to skip
-                validation for performance-sensitive pipelines. Requires
-                ``pydantic`` (``pip install synergy-dataset[validation]``).
-
         Yields:
-            tuple: (work, label_included) where work is a WorkModel
-                (validate=True) or pyalex.Work (validate=False), and
-                label_included is an int (0 or 1).
+            tuple: (work, label_included) where work is a pyalex.Work
+                (dict-like), and label_included is an int (0 or 1).
         """
-        if validate:
-            from synergy_dataset.models import WorkModel
-
-        is_plus = SYNERGY_SET == "synergy+"
+        is_plus = SYNERGY_SET == SYNERGY_PLUS
         p_zipped_works = str(Path(self._path, "works_*.zip"))
 
         for f_work in glob.glob(p_zipped_works):
@@ -633,20 +628,12 @@ class Dataset:
                             label_info = self.labels[w["id"].lower()]
                             label_included = label_info["label_included"]
 
-                            work = WorkModel(**w) if validate else Work(w)
+                            work = Work(w)
 
                             if is_plus:
-                                if validate:
-                                    aii = work.abstract_inverted_index_cleaned
-                                    is_oa = (
-                                        work.open_access.is_oa
-                                        if work.open_access
-                                        else False
-                                    )
-                                else:
-                                    aii = work.get("abstract_inverted_index_cleaned")
-                                    oa = work.get("open_access") or {}
-                                    is_oa = oa.get("is_oa", False)
+                                aii = work.get("abstract_inverted_index_cleaned")
+                                oa = work.get("open_access") or {}
+                                is_oa = oa.get("is_oa", False)
                                 if not is_oa or not _is_valid_abstract(aii):
                                     continue
 
@@ -656,8 +643,9 @@ class Dataset:
         """Export the dataset to a dictionary.
 
         The base record for each work always contains the fields from
-        ``labels.csv``: ``doi``, ``pmid``, ``lens_id``, ``label_included``,
-        and ``label_abstract_included`` (when available).
+        ``labels.csv``: ``doi``, ``lens_id``, ``label_included``, and
+        ``label_abstract_included`` (when available). ``pmid`` is not
+        included by default but remains available via ``Dataset.labels``.
 
         Args:
             vars (list, str, or None): Work-derived fields to include on top
@@ -689,14 +677,13 @@ class Dataset:
         extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
         # For old synergy, pre-seed all label keys in CSV order so the
         # returned dict is complete and ordered even if zip files are sparse.
-        is_plus = SYNERGY_SET == "synergy+"
+        is_plus = SYNERGY_SET == SYNERGY_PLUS
         records = {} if is_plus else {k: None for k in self.labels}
         for work, _ in self.iter():
-            work_id = work.id.lower()
+            work_id = work["id"].lower()
             label_info = self.labels[work_id]
             record = {
                 "doi": label_info["doi"],
-                "pmid": label_info["pmid"],
                 "lens_id": label_info["lens_id"],
             }
             for field, extractor in extractors.items():
@@ -755,7 +742,7 @@ class Dataset:
         languages = Counter()
         topic_counter = Counter()
 
-        for work, _ in self.iter(validate=False):
+        for work, _ in self.iter():
             year = work["publication_year"]
             if year is not None:
                 years.append(year)
