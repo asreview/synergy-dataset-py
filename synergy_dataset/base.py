@@ -117,7 +117,7 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
 
     Files that already exist locally with the expected size are skipped, so
     an interrupted or partial download can simply be re-run to pick up where
-    it left off. Freshly downloaded files are checked against dataverse's 
+    it left off. Freshly downloaded files are checked against dataverse's
     published SHA-1 checksum.
 
     Args:
@@ -131,9 +131,7 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
     target_root = Path(path, dir_prefix)
     file_list = _get_dataverse_file_list(version=version)
     files = [
-        f
-        for f in file_list
-        if f.get("directoryLabel", "").startswith(f"{dir_prefix}/")
+        f for f in file_list if f.get("directoryLabel", "").startswith(f"{dir_prefix}/")
     ]
 
     # First check if we have missing files that need to be downloaded
@@ -284,7 +282,9 @@ def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
     file_list = _get_dataverse_file_list(version=version)
 
     dir_prefix = (
-        "synergy-dataset-plus" if SYNERGY_SET == SYNERGY_PLUS else "synergy-dataset-v1.0"
+        "synergy-dataset-plus"
+        if SYNERGY_SET == SYNERGY_PLUS
+        else "synergy-dataset-v1.0"
     )
     files_subset = filter(
         lambda x: x.get("directoryLabel", "") == f"{dir_prefix}/{name}", file_list

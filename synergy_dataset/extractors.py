@@ -99,9 +99,7 @@ WORK_EXTRACTORS = {
     ],
     "authorships": _get_authorships,
     # --- Topics ---
-    "primary_topic_name": lambda w: (w.get("primary_topic") or {}).get(
-        "display_name"
-    ),
+    "primary_topic_name": lambda w: (w.get("primary_topic") or {}).get("display_name"),
     "primary_topic_field": lambda w: (
         (w.get("primary_topic") or {}).get("field") or {}
     ).get("display_name"),
@@ -113,9 +111,7 @@ WORK_EXTRACTORS = {
         for t in (w.get("topics") or [])
     ],
     # --- Keywords / MeSH / SDGs ---
-    "keywords": lambda w: [
-        k.get("display_name") for k in (w.get("keywords") or [])
-    ],
+    "keywords": lambda w: [k.get("display_name") for k in (w.get("keywords") or [])],
     "mesh": lambda w: [
         {
             "descriptor_name": m.get("descriptor_name"),

@@ -1,5 +1,4 @@
-"""Tests for the synergy+ dataset.
-"""
+"""Tests for the synergy+ dataset."""
 
 import pytest
 

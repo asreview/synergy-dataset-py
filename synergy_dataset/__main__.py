@@ -319,9 +319,7 @@ def build_dataset(argv):
                 )
             else:
                 download_reviews_csv()
-        reviews_csv_path = (
-            _get_reviews_csv_path() if _reviews_csv_available() else None
-        )
+        reviews_csv_path = _get_reviews_csv_path() if _reviews_csv_available() else None
 
         print("Writing review metadata")
         _write_review_metadata(
