@@ -27,7 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 lint = ["flake8", "flake8-import-order"]
-test = ["pytest"]
+test = ["pytest", "pandas"]
 
 [project.scripts]
 synergy-dataset = "synergy_dataset.__main__:main"
