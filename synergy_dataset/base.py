@@ -285,10 +285,16 @@ def _dataset_available(version=None):
 def _ensure_dataset_downloaded(version=None):
     """Make sure the raw dataset is present and complete before it's used.
 
-    For the classic SYNERGY set this is the old "download once" check: if
-    the target folder exists, assume it's complete. For SYNERGY+ this is
-    handled by the download_raw_dataset_plus function.
+    If SYNERGY_PATH is set, the user is supplying their own copy of the
+    dataset (e.g. a local folder or the "development" checkout) and no
+    download should happen.
+
+    Otherwise, for the classic SYNERGY set this is the old "download once"
+    check: if the target folder exists, assume it's complete. For SYNERGY+
+    this is handled by the download_raw_dataset_plus function.
     """
+    if SYNERGY_PATH:
+        return
     if SYNERGY_SET == SYNERGY_PLUS:
         download_raw_dataset(version=version)
     elif not _dataset_available(version=version):
