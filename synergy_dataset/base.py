@@ -136,7 +136,9 @@ def _get_with_retry(url, process, bypass_cache=False):
             last_error = e
             if attempt < DATAVERSE_MAX_RETRIES - 1:
                 time.sleep(DATAVERSE_RETRY_BACKOFF * (2**attempt))
-    raise last_error
+    raise requests.RequestException(
+        f"Giving up on {url} after {DATAVERSE_MAX_RETRIES} attempts: {last_error}"
+    ) from last_error
 
 
 def _get_dataverse_file_list(version=None):
@@ -177,7 +179,7 @@ def _fetch_binary_with_retry(url):
         if r.headers.get("Content-Type", "").startswith("text/html"):
             raise requests.exceptions.RequestException(
                 f"Expected a file download but got an HTML response "
-                f"(likely a transient error page) from {url}"
+                f"from {url}"
             )
         return r
 
