@@ -35,6 +35,10 @@ ABSTRACT_MIN_WORDS = 20
 ABSTRACT_MIN_CHARS = 100
 MIN_INCLUSIONS = 3
 
+DATAVERSE_MAX_RETRIES = 3
+DATAVERSE_RETRY_BACKOFF = 10  # seconds; doubled on each subsequent retry (10s, 20s)
+DATAVERSE_TIMEOUT = (10, 60)  # (connect, read) seconds, per requests.get()
+
 # Process-level cache for Dataset.counts, keyed by dataset path.
 _counts_cache = {}
 
@@ -63,9 +67,6 @@ def _is_json_response(response):
 requests_cache.install_cache(
     "synergy_cache", expire_after=24 * 60 * 60, filter_fn=_is_json_response
 )
-
-DATAVERSE_MAX_RETRIES = 3
-DATAVERSE_RETRY_BACKOFF = 2  # seconds; doubled on each subsequent retry
 
 
 def _resolve_version(version=None):
@@ -106,6 +107,38 @@ def _get_dataverse_doi(source_set=None):
     return "10.34894/DDCVCV" if source_set == SYNERGY_PLUS else "10.34894/HE6NAQ"
 
 
+def _get_with_retry(url, process, bypass_cache=False):
+    """GET url with retry-on-failure and a connect/read timeout.
+
+    `process(response)` runs after raise_for_status() succeeds and may raise
+    a requests.RequestException (or subclass, e.g. JSONDecodeError) to
+    signal a bad response body and trigger a retry, same as a connection
+    failure would.
+
+    Args:
+        url (str): URL to fetch.
+        process (callable): called with the successful response; its return
+            value is returned by this function.
+        bypass_cache (bool, optional): if True, issue the GET inside
+            requests_cache.disabled(). Defaults to False.
+    """
+    last_error = None
+    for attempt in range(DATAVERSE_MAX_RETRIES):
+        try:
+            if bypass_cache:
+                with requests_cache.disabled():
+                    r = requests.get(url, timeout=DATAVERSE_TIMEOUT)
+            else:
+                r = requests.get(url, timeout=DATAVERSE_TIMEOUT)
+            r.raise_for_status()
+            return process(r)
+        except requests.RequestException as e:
+            last_error = e
+            if attempt < DATAVERSE_MAX_RETRIES - 1:
+                time.sleep(DATAVERSE_RETRY_BACKOFF * (2**attempt))
+    raise last_error
+
+
 def _get_dataverse_file_list(version=None):
     """Fetch the file listing (name, directory, size, checksum) for the
     current SYNERGY_SET's dataverse dataset version.
@@ -121,18 +154,7 @@ def _get_dataverse_file_list(version=None):
         f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}"
         f"?persistentId=doi:{_get_dataverse_doi()}"
     )
-
-    last_error = None
-    for attempt in range(DATAVERSE_MAX_RETRIES):
-        r = requests.get(url_list)
-        r.raise_for_status()
-        try:
-            return r.json()["data"]["files"]
-        except requests.exceptions.JSONDecodeError as e:
-            last_error = e
-            if attempt < DATAVERSE_MAX_RETRIES - 1:
-                time.sleep(DATAVERSE_RETRY_BACKOFF * (attempt + 1))
-    raise last_error
+    return _get_with_retry(url_list, lambda r: r.json()["data"]["files"])
 
 
 def _sha1_matches(path, expected_hex):
@@ -145,28 +167,21 @@ def _sha1_matches(path, expected_hex):
 
 
 def _fetch_binary_with_retry(url):
-    """GET a binary file (zip/csv/etc.) with retry-on-transient-failure.
+    """GET a binary file (zip/csv/etc.) with retry-on-failure.
 
     Returns:
         requests.Response: the validated response.
     """
-    last_error = None
-    for attempt in range(DATAVERSE_MAX_RETRIES):
-        try:
-            with requests_cache.disabled():
-                r = requests.get(url)
-            r.raise_for_status()
-            if r.headers.get("Content-Type", "").startswith("text/html"):
-                raise requests.exceptions.RequestException(
-                    f"Expected a file download but got an HTML response "
-                    f"(likely a transient error page) from {url}"
-                )
-            return r
-        except requests.RequestException as e:
-            last_error = e
-            if attempt < DATAVERSE_MAX_RETRIES - 1:
-                time.sleep(DATAVERSE_RETRY_BACKOFF * (attempt + 1))
-    raise last_error
+
+    def _check_binary(r):
+        if r.headers.get("Content-Type", "").startswith("text/html"):
+            raise requests.exceptions.RequestException(
+                f"Expected a file download but got an HTML response "
+                f"(likely a transient error page) from {url}"
+            )
+        return r
+
+    return _get_with_retry(url, _check_binary, bypass_cache=True)
 
 
 def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
