@@ -322,20 +322,32 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
     response = _fetch_binary_with_retry(url)
 
     release_zip = zipfile.ZipFile(BytesIO(response.content))
+    # Archive tags don't always map onto the folder name our code expects
+    # (e.g. a "synergy_plus_v2.1" tag unpacks to
+    # "synergy-dataset-synergy_plus_v2.1/", not "synergy-dataset-plus")
+    root_names = {n.split("/", 1)[0] for n in release_zip.namelist()}
     release_zip.extractall(path=path)
 
-    for f in Path(path).iterdir():
-        if f.is_dir() and f.name.startswith("synergy-dataset-v"):
-            target = Path(str(f).replace("synergy-dataset-v", "synergy-dataset-"))
-            if target.exists():
-                for child in f.iterdir():
-                    dest = target / child.name
-                    if dest.exists():
-                        shutil.rmtree(dest) if dest.is_dir() else dest.unlink()
-                    shutil.move(str(child), str(dest))
-                f.rmdir()
-            else:
-                os.rename(f, target)
+    target_name = (
+        "synergy-dataset-plus"
+        if SYNERGY_SET == SYNERGY_PLUS
+        else f"synergy-dataset-{version}"
+    )
+    target = Path(path, target_name)
+
+    for root_name in root_names:
+        f = Path(path, root_name)
+        if not f.is_dir() or f == target:
+            continue
+        if target.exists():
+            for child in f.iterdir():
+                dest = target / child.name
+                if dest.exists():
+                    shutil.rmtree(dest) if dest.is_dir() else dest.unlink()
+                shutil.move(str(child), str(dest))
+            f.rmdir()
+        else:
+            os.rename(f, target)
 
 
 def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
