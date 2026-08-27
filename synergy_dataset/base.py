@@ -74,13 +74,13 @@ def _resolve_version(version=None):
 
     Precedence: an explicit ``version`` argument, then the ``SYNERGY_VERSION``
     env var override, then a default based on the *current* ``SYNERGY_SET``
-    ("2.0" for synergy_plus, "1.0" for the classic set).
+    ("3.0" for synergy_plus, "1.0" for the classic set).
     """
     if version is not None:
         return version
     if SYNERGY_VERSION:
         return SYNERGY_VERSION
-    return "2.0" if SYNERGY_SET == SYNERGY_PLUS else "1.0"
+    return "3.0" if SYNERGY_SET == SYNERGY_PLUS else "1.0"
 
 
 def _get_path_raw_dataset(version=None):

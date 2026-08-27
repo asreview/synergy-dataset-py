@@ -202,7 +202,7 @@ print(d.summary())    # quick statistics
 | Variable | Default | Description |
 |---|---|---|
 | `SYNERGY_SET` | `synergy_plus` | Dataset variant: `synergy_plus` or `synergy` |
-| `SYNERGY_VERSION` | `2.0` | Dataset version to download |
+| `SYNERGY_VERSION` | `3.0` | Dataset version to download |
 | `SYNERGY_PATH` | *(auto)* | Custom path to dataset; `development` for local dev |
 
 ---
