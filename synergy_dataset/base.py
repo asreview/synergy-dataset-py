@@ -35,6 +35,10 @@ ABSTRACT_MIN_WORDS = 20
 ABSTRACT_MIN_CHARS = 100
 MIN_INCLUSIONS = 3
 
+DATAVERSE_MAX_RETRIES = 3
+DATAVERSE_RETRY_BACKOFF = 10  # seconds; doubled on each subsequent retry (10s, 20s)
+DATAVERSE_TIMEOUT = (10, 60)  # (connect, read) seconds, per requests.get()
+
 # Process-level cache for Dataset.counts, keyed by dataset path.
 _counts_cache = {}
 
@@ -64,22 +68,19 @@ requests_cache.install_cache(
     "synergy_cache", expire_after=24 * 60 * 60, filter_fn=_is_json_response
 )
 
-DATAVERSE_MAX_RETRIES = 3
-DATAVERSE_RETRY_BACKOFF = 2  # seconds; doubled on each subsequent retry
-
 
 def _resolve_version(version=None):
     """Resolve the dataset version to use.
 
     Precedence: an explicit ``version`` argument, then the ``SYNERGY_VERSION``
     env var override, then a default based on the *current* ``SYNERGY_SET``
-    ("2.0" for synergy_plus, "1.0" for the classic set).
+    ("3.0" for synergy_plus, "1.0" for the classic set).
     """
     if version is not None:
         return version
     if SYNERGY_VERSION:
         return SYNERGY_VERSION
-    return "2.0" if SYNERGY_SET == SYNERGY_PLUS else "1.0"
+    return "3.0" if SYNERGY_SET == SYNERGY_PLUS else "1.0"
 
 
 def _get_path_raw_dataset(version=None):
@@ -106,6 +107,40 @@ def _get_dataverse_doi(source_set=None):
     return "10.34894/DDCVCV" if source_set == SYNERGY_PLUS else "10.34894/HE6NAQ"
 
 
+def _get_with_retry(url, process, bypass_cache=False):
+    """GET url with retry-on-failure and a connect/read timeout.
+
+    `process(response)` runs after raise_for_status() succeeds and may raise
+    a requests.RequestException (or subclass, e.g. JSONDecodeError) to
+    signal a bad response body and trigger a retry, same as a connection
+    failure would.
+
+    Args:
+        url (str): URL to fetch.
+        process (callable): called with the successful response; its return
+            value is returned by this function.
+        bypass_cache (bool, optional): if True, issue the GET inside
+            requests_cache.disabled(). Defaults to False.
+    """
+    last_error = None
+    for attempt in range(DATAVERSE_MAX_RETRIES):
+        try:
+            if bypass_cache:
+                with requests_cache.disabled():
+                    r = requests.get(url, timeout=DATAVERSE_TIMEOUT)
+            else:
+                r = requests.get(url, timeout=DATAVERSE_TIMEOUT)
+            r.raise_for_status()
+            return process(r)
+        except requests.RequestException as e:
+            last_error = e
+            if attempt < DATAVERSE_MAX_RETRIES - 1:
+                time.sleep(DATAVERSE_RETRY_BACKOFF * (2**attempt))
+    raise requests.RequestException(
+        f"Giving up on {url} after {DATAVERSE_MAX_RETRIES} attempts: {last_error}"
+    ) from last_error
+
+
 def _get_dataverse_file_list(version=None):
     """Fetch the file listing (name, directory, size, checksum) for the
     current SYNERGY_SET's dataverse dataset version.
@@ -121,18 +156,7 @@ def _get_dataverse_file_list(version=None):
         f"https://dataverse.nl/api/datasets/:persistentId/versions/{version}"
         f"?persistentId=doi:{_get_dataverse_doi()}"
     )
-
-    last_error = None
-    for attempt in range(DATAVERSE_MAX_RETRIES):
-        r = requests.get(url_list)
-        r.raise_for_status()
-        try:
-            return r.json()["data"]["files"]
-        except requests.exceptions.JSONDecodeError as e:
-            last_error = e
-            if attempt < DATAVERSE_MAX_RETRIES - 1:
-                time.sleep(DATAVERSE_RETRY_BACKOFF * (attempt + 1))
-    raise last_error
+    return _get_with_retry(url_list, lambda r: r.json()["data"]["files"])
 
 
 def _sha1_matches(path, expected_hex):
@@ -144,29 +168,49 @@ def _sha1_matches(path, expected_hex):
     return h.hexdigest() == expected_hex.lower()
 
 
+def _matches_checksum_modulo_newlines(local_file, checksum):
+    """Return True if local_file's content matches checksum, normalizing
+    line endings first if a plain comparison fails.
+
+    Dataverse and GitHub can serve the same CSV with different line
+    endings (\\n vs \\r\\n), which changes the file size and SHA-1 without
+    changing the content.
+    """
+    if checksum.get("type") != "SHA-1" or not checksum.get("value"):
+        return False
+    expected = checksum["value"].lower()
+    data = local_file.read_bytes()
+    if hashlib.sha1(data).hexdigest() == expected:
+        return True
+
+    alt = (
+        data.replace(b"\r\n", b"\n")
+        if b"\r" in data
+        else data.replace(b"\n", b"\r\n")
+    )
+    if hashlib.sha1(alt).hexdigest() == expected:
+        local_file.write_bytes(alt)
+        return True
+
+    return False
+
+
 def _fetch_binary_with_retry(url):
-    """GET a binary file (zip/csv/etc.) with retry-on-transient-failure.
+    """GET a binary file (zip/csv/etc.) with retry-on-failure.
 
     Returns:
         requests.Response: the validated response.
     """
-    last_error = None
-    for attempt in range(DATAVERSE_MAX_RETRIES):
-        try:
-            with requests_cache.disabled():
-                r = requests.get(url)
-            r.raise_for_status()
-            if r.headers.get("Content-Type", "").startswith("text/html"):
-                raise requests.exceptions.RequestException(
-                    f"Expected a file download but got an HTML response "
-                    f"(likely a transient error page) from {url}"
-                )
-            return r
-        except requests.RequestException as e:
-            last_error = e
-            if attempt < DATAVERSE_MAX_RETRIES - 1:
-                time.sleep(DATAVERSE_RETRY_BACKOFF * (attempt + 1))
-    raise last_error
+
+    def _check_binary(r):
+        if r.headers.get("Content-Type", "").startswith("text/html"):
+            raise requests.exceptions.RequestException(
+                f"Expected a file download but got an HTML response "
+                f"from {url}"
+            )
+        return r
+
+    return _get_with_retry(url, _check_binary, bypass_cache=True)
 
 
 def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
@@ -201,12 +245,14 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
         rel_dir = f["directoryLabel"][len(dir_prefix) + 1 :]
         data_file = f["dataFile"]
         expected_size = data_file.get("filesize")
+        checksum = data_file.get("checksum") or {}
         local_file = target_root / rel_dir / data_file["filename"]
 
-        if local_file.exists() and (
-            expected_size is None or local_file.stat().st_size == expected_size
-        ):
-            continue
+        if local_file.exists():
+            if expected_size is None or local_file.stat().st_size == expected_size:
+                continue
+            if _matches_checksum_modulo_newlines(local_file, checksum):
+                continue
         to_download.append((rel_dir, data_file, local_file))
 
     if not to_download:
@@ -268,10 +314,16 @@ def _dataset_available(version=None):
 def _ensure_dataset_downloaded(version=None):
     """Make sure the raw dataset is present and complete before it's used.
 
-    For the classic SYNERGY set this is the old "download once" check: if
-    the target folder exists, assume it's complete. For SYNERGY+ this is
-    handled by the download_raw_dataset_plus function.
+    If SYNERGY_PATH is set, the user is supplying their own copy of the
+    dataset (e.g. a local folder or the "development" checkout) and no
+    download should happen.
+
+    Otherwise, for the classic SYNERGY set this is the old "download once"
+    check: if the target folder exists, assume it's complete. For SYNERGY+
+    this is handled by the download_raw_dataset_plus function.
     """
+    if SYNERGY_PATH:
+        return
     if SYNERGY_SET == SYNERGY_PLUS:
         download_raw_dataset(version=version)
     elif not _dataset_available(version=version):
@@ -280,6 +332,9 @@ def _ensure_dataset_downloaded(version=None):
 
 def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="dataverse"):
     """Download the raw dataset from the SYNERGY repository.
+
+    A full dataset download is skipped if the target folder already exists 
+    locally.
 
     Args:
         url (str, optional): URL to the SYNERGY dataset.
@@ -295,30 +350,45 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
         download_raw_dataset_plus(path=path, version=version)
         return
 
+    version = _resolve_version(version)
+    target_name = (
+        "synergy-dataset-plus"
+        if SYNERGY_SET == SYNERGY_PLUS
+        else f"synergy-dataset-{version}"
+    )
+    target = Path(path, target_name)
+
+    if url is None and target.exists():
+        return
+
     if url is None:
         url = _get_download_url(version=version, source=source)
 
-    version = _resolve_version(version)
     set_name = "SYNERGY+" if SYNERGY_SET == SYNERGY_PLUS else "SYNERGY"
     print(f"Downloading version {version} of the {set_name} dataset...")
 
     response = _fetch_binary_with_retry(url)
 
     release_zip = zipfile.ZipFile(BytesIO(response.content))
+    # Archive tags don't always map onto the folder name our code expects
+    # (e.g. a "synergy_plus_v2.1" tag unpacks to
+    # "synergy-dataset-synergy_plus_v2.1/", not "synergy-dataset-plus")
+    root_names = {n.split("/", 1)[0] for n in release_zip.namelist()}
     release_zip.extractall(path=path)
 
-    for f in Path(path).iterdir():
-        if f.is_dir() and f.name.startswith("synergy-dataset-v"):
-            target = Path(str(f).replace("synergy-dataset-v", "synergy-dataset-"))
-            if target.exists():
-                for child in f.iterdir():
-                    dest = target / child.name
-                    if dest.exists():
-                        shutil.rmtree(dest) if dest.is_dir() else dest.unlink()
-                    shutil.move(str(child), str(dest))
-                f.rmdir()
-            else:
-                os.rename(f, target)
+    for root_name in root_names:
+        f = Path(path, root_name)
+        if not f.is_dir() or f == target:
+            continue
+        if target.exists():
+            for child in f.iterdir():
+                dest = target / child.name
+                if dest.exists():
+                    shutil.rmtree(dest) if dest.is_dir() else dest.unlink()
+                shutil.move(str(child), str(dest))
+            f.rmdir()
+        else:
+            os.rename(f, target)
 
 
 def download_raw_subset(name, path=SYNERGY_ROOT, version=None):
