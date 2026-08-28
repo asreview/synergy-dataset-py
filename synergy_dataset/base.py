@@ -168,6 +168,33 @@ def _sha1_matches(path, expected_hex):
     return h.hexdigest() == expected_hex.lower()
 
 
+def _matches_checksum_modulo_newlines(local_file, checksum):
+    """Return True if local_file's content matches checksum, normalizing
+    line endings first if a plain comparison fails.
+
+    Dataverse and GitHub can serve the same CSV with different line
+    endings (\\n vs \\r\\n), which changes the file size and SHA-1 without
+    changing the content.
+    """
+    if checksum.get("type") != "SHA-1" or not checksum.get("value"):
+        return False
+    expected = checksum["value"].lower()
+    data = local_file.read_bytes()
+    if hashlib.sha1(data).hexdigest() == expected:
+        return True
+
+    alt = (
+        data.replace(b"\r\n", b"\n")
+        if b"\r" in data
+        else data.replace(b"\n", b"\r\n")
+    )
+    if hashlib.sha1(alt).hexdigest() == expected:
+        local_file.write_bytes(alt)
+        return True
+
+    return False
+
+
 def _fetch_binary_with_retry(url):
     """GET a binary file (zip/csv/etc.) with retry-on-failure.
 
@@ -218,12 +245,14 @@ def download_raw_dataset_plus(path=SYNERGY_ROOT, version=None):
         rel_dir = f["directoryLabel"][len(dir_prefix) + 1 :]
         data_file = f["dataFile"]
         expected_size = data_file.get("filesize")
+        checksum = data_file.get("checksum") or {}
         local_file = target_root / rel_dir / data_file["filename"]
 
-        if local_file.exists() and (
-            expected_size is None or local_file.stat().st_size == expected_size
-        ):
-            continue
+        if local_file.exists():
+            if expected_size is None or local_file.stat().st_size == expected_size:
+                continue
+            if _matches_checksum_modulo_newlines(local_file, checksum):
+                continue
         to_download.append((rel_dir, data_file, local_file))
 
     if not to_download:
@@ -304,6 +333,9 @@ def _ensure_dataset_downloaded(version=None):
 def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="dataverse"):
     """Download the raw dataset from the SYNERGY repository.
 
+    A full dataset download is skipped if the target folder already exists 
+    locally.
+
     Args:
         url (str, optional): URL to the SYNERGY dataset.
         Defaults to latest github release.
@@ -318,10 +350,20 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
         download_raw_dataset_plus(path=path, version=version)
         return
 
+    version = _resolve_version(version)
+    target_name = (
+        "synergy-dataset-plus"
+        if SYNERGY_SET == SYNERGY_PLUS
+        else f"synergy-dataset-{version}"
+    )
+    target = Path(path, target_name)
+
+    if url is None and target.exists():
+        return
+
     if url is None:
         url = _get_download_url(version=version, source=source)
 
-    version = _resolve_version(version)
     set_name = "SYNERGY+" if SYNERGY_SET == SYNERGY_PLUS else "SYNERGY"
     print(f"Downloading version {version} of the {set_name} dataset...")
 
@@ -333,13 +375,6 @@ def download_raw_dataset(url=None, path=SYNERGY_ROOT, version=None, source="data
     # "synergy-dataset-synergy_plus_v2.1/", not "synergy-dataset-plus")
     root_names = {n.split("/", 1)[0] for n in release_zip.namelist()}
     release_zip.extractall(path=path)
-
-    target_name = (
-        "synergy-dataset-plus"
-        if SYNERGY_SET == SYNERGY_PLUS
-        else f"synergy-dataset-{version}"
-    )
-    target = Path(path, target_name)
 
     for root_name in root_names:
         f = Path(path, root_name)
