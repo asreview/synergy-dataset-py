@@ -5,7 +5,7 @@ import pytest
 from synergy_dataset import WORK_EXTRACTORS
 from synergy_dataset import Dataset
 from synergy_dataset import iter_datasets
-from synergy_dataset.base import download_raw_subset
+from synergy_dataset.base import SYNERGY_ROOT
 
 DATASETS = ["Chou_2003", "Oud_2018"]
 
@@ -29,27 +29,14 @@ def enable_synergy_plus():
     _base.SYNERGY_SET = original
 
 
-@pytest.fixture(scope="module")
-def real_root(tmp_path_factory, enable_synergy_plus):
-    """Download DATASETS once for the whole module and return the root dir
-    iter_datasets(path=...) expects (i.e. the parent of synergy-dataset-plus).
-    """
-    root = tmp_path_factory.mktemp("synergy_plus_real")
-    for name in DATASETS:
-        download_raw_subset(name, path=root)
-    return root
-
-
 @pytest.fixture(scope="module", params=DATASETS)
-def dataset(request, real_root):
-    path = real_root / "synergy-dataset-plus" / request.param
-    return Dataset(request.param, path=path)
+def dataset(request, enable_synergy_plus):
+    return Dataset(request.param)
 
 
 @pytest.fixture(scope="module")
-def single_test_dataset(real_root):
-    path = real_root / "synergy-dataset-plus" / SINGLE_TEST_DATASET
-    return Dataset(SINGLE_TEST_DATASET, path=path)
+def single_test_dataset(enable_synergy_plus):
+    return Dataset(SINGLE_TEST_DATASET)
 
 
 # ---------------------------------------------------------------------------
@@ -57,14 +44,14 @@ def single_test_dataset(real_root):
 # ---------------------------------------------------------------------------
 
 
-def test_iter_datasets_returns_multiple(real_root):
+def test_iter_datasets_returns_multiple():
     # min_inclusions=None: Chou_2003 only has 1 qualifying inclusion, below
     # the default MIN_INCLUSIONS of 3, so it would otherwise be filtered out
-    assert len(list(iter_datasets(path=real_root, min_inclusions=None))) > 1
+    assert len(list(iter_datasets(path=SYNERGY_ROOT, min_inclusions=None))) > 1
 
 
-def test_iter_datasets_yields_dataset_instances(real_root):
-    for d in iter_datasets(path=real_root, min_inclusions=None):
+def test_iter_datasets_yields_dataset_instances():
+    for d in iter_datasets(path=SYNERGY_ROOT, min_inclusions=None):
         assert isinstance(d, Dataset)
         break
 
@@ -74,24 +61,24 @@ def test_iter_datasets_split_invalid_raises():
         next(iter_datasets(split="val"))
 
 
-def test_iter_datasets_train_test_are_disjoint(real_root):
+def test_iter_datasets_train_test_are_disjoint():
     from synergy_dataset.splits import TEST_SPLIT
 
     if not TEST_SPLIT:
         pytest.skip("TEST_SPLIT not yet populated")
-    train = {d.name for d in iter_datasets(path=real_root, split="train")}
-    test = {d.name for d in iter_datasets(path=real_root, split="test")}
+    train = {d.name for d in iter_datasets(path=SYNERGY_ROOT, split="train")}
+    test = {d.name for d in iter_datasets(path=SYNERGY_ROOT, split="test")}
     assert train.isdisjoint(test)
 
 
-def test_iter_datasets_train_test_cover_all(real_root):
+def test_iter_datasets_train_test_cover_all():
     from synergy_dataset.splits import TEST_SPLIT
 
     if not TEST_SPLIT:
         pytest.skip("TEST_SPLIT not yet populated")
-    all_names = {d.name for d in iter_datasets(path=real_root)}
-    train = {d.name for d in iter_datasets(path=real_root, split="train")}
-    test = {d.name for d in iter_datasets(path=real_root, split="test")}
+    all_names = {d.name for d in iter_datasets(path=SYNERGY_ROOT)}
+    train = {d.name for d in iter_datasets(path=SYNERGY_ROOT, split="train")}
+    test = {d.name for d in iter_datasets(path=SYNERGY_ROOT, split="test")}
     assert train | test == all_names
 
 
@@ -380,27 +367,3 @@ def test_all_extractors_run_without_error(single_test_dataset):
 def test_all_extractors_usable_as_vars(single_test_dataset):
     for name in WORK_EXTRACTORS:
         single_test_dataset.to_dict(vars=[name])
-
-
-# ---------------------------------------------------------------------------
-# Download single dataset
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("dataset_name", DATASETS)
-def test_download_single_dataset(dataset_name, tmpdir):
-    download_raw_subset(dataset_name, path=tmpdir)
-
-    # min_inclusions=None: Chou_2003 doesn't clear the default
-    # MIN_INCLUSIONS threshold on its own (see module docstring), which
-    # isn't what this test is about -- it's checking that a single
-    # downloaded dataset is discoverable and loads correctly.
-    datasets = iter_datasets(path=tmpdir, min_inclusions=None)
-    d = next(datasets)
-
-    assert isinstance(d, Dataset)
-    assert d.name == dataset_name
-    assert isinstance(d.labels, dict)
-
-    with pytest.raises(StopIteration):
-        next(datasets)

@@ -6,7 +6,6 @@ from synergy_dataset import WORK_EXTRACTORS
 from synergy_dataset import Dataset
 from synergy_dataset import iter_datasets
 from synergy_dataset.base import _is_valid_abstract
-from synergy_dataset.base import download_raw_subset
 from synergy_dataset.extractors import _reconstruct_abstract
 
 DATASETS = ["Chou_2003", "Oud_2018"]
@@ -31,27 +30,14 @@ def enable_synergy():
     _base.SYNERGY_SET = original
 
 
-@pytest.fixture(scope="module")
-def real_root(tmp_path_factory, enable_synergy):
-    """Download DATASETS once for the whole module and return the root dir
-    iter_datasets(path=...) expects (i.e. the parent of synergy-dataset-1.0).
-    """
-    root = tmp_path_factory.mktemp("synergy_real")
-    for name in DATASETS:
-        download_raw_subset(name, path=root)
-    return root
-
-
 @pytest.fixture(scope="module", params=DATASETS)
-def dataset(request, real_root):
-    path = real_root / "synergy-dataset-1.0" / request.param
-    return Dataset(request.param, path=path)
+def dataset(request, enable_synergy):
+    return Dataset(request.param)
 
 
 @pytest.fixture(scope="module")
-def single_test_dataset(real_root):
-    path = real_root / "synergy-dataset-1.0" / SINGLE_TEST_DATASET
-    return Dataset(SINGLE_TEST_DATASET, path=path)
+def single_test_dataset(enable_synergy):
+    return Dataset(SINGLE_TEST_DATASET)
 
 
 # ---------------------------------------------------------------------------
@@ -59,12 +45,12 @@ def single_test_dataset(real_root):
 # ---------------------------------------------------------------------------
 
 
-def test_iter_datasets_returns_multiple(real_root):
-    assert len(list(iter_datasets(path=real_root))) > 1
+def test_iter_datasets_returns_multiple():
+    assert len(list(iter_datasets())) > 1
 
 
-def test_iter_datasets_yields_dataset_instances(real_root):
-    for d in iter_datasets(path=real_root):
+def test_iter_datasets_yields_dataset_instances():
+    for d in iter_datasets():
         assert isinstance(d, Dataset)
         break
 
@@ -399,23 +385,3 @@ def test_all_extractors_usable_as_vars(single_test_dataset):
     """Each extractor name must be accepted by to_dict without error."""
     for name in WORK_EXTRACTORS:
         single_test_dataset.to_dict(vars=[name])
-
-
-# ---------------------------------------------------------------------------
-# Download single dataset
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("dataset_name", DATASETS)
-def test_download_single_dataset(dataset_name, tmpdir):
-    download_raw_subset(dataset_name, path=tmpdir)
-
-    datasets = iter_datasets(path=tmpdir)
-    d = next(datasets)
-
-    assert isinstance(d, Dataset)
-    assert d.name == dataset_name
-    assert isinstance(d.labels, dict)
-
-    with pytest.raises(StopIteration):
-        next(datasets)

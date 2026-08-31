@@ -5,7 +5,60 @@ name: Python package
 on: [push, pull_request]
 
 jobs:
+  cache-datasets:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.13"
+    - name: Install package
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install .
+    - name: Cache synergy datasets
+      uses: actions/cache@v4
+      with:
+        path: ~/.synergy_dataset_source
+        key: synergy-plus-dataset-${{ runner.os }}-v3.0
+    - name: Download synergy datasets
+      run: |
+        python -c "
+        import synergy_dataset.base as _base
+        from synergy_dataset.base import _dataset_available, download_raw_dataset
+
+        for synergy_set in ('synergy', 'synergy_plus'):
+            _base.SYNERGY_SET = synergy_set
+            if not _dataset_available():
+                try:
+                    download_raw_dataset(source='github')
+                except Exception:
+                    download_raw_dataset(source='dataverse')
+            print(f'{synergy_set} dataset available:', _dataset_available())
+        "
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.13"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install flake8
+    - name: Lint with flake8
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
   build:
+    needs: cache-datasets
 
     runs-on: ubuntu-latest
     strategy:
@@ -23,13 +76,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install .[test]
-        python -m pip install flake8
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Restore synergy datasets cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.synergy_dataset_source
+        key: synergy-plus-dataset-${{ runner.os }}-v3.0
     - name: Test with pytest
       run: |
         pytest
