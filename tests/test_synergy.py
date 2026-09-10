@@ -385,3 +385,29 @@ def test_all_extractors_usable_as_vars(single_test_dataset):
     """Each extractor name must be accepted by to_dict without error."""
     for name in WORK_EXTRACTORS:
         single_test_dataset.to_dict(vars=[name])
+
+
+# ---------------------------------------------------------------------------
+# missing dataset
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda d: list(d.iter()),
+        lambda d: d.to_dict(),
+        lambda d: d.counts,
+        lambda d: d.summary(),
+    ],
+    ids=["iter", "to_dict", "counts", "summary"],
+)
+def test_missing_dataset_raises_file_not_found(tmp_path, call):
+    """A dataset that is not on disk must raise, never return empty.
+
+    Downstream callers (asreview) catch FileNotFoundError to trigger the
+    download, so silently yielding nothing would break them.
+    """
+    dataset = Dataset("Missing_2024", path=tmp_path / "Missing_2024")
+    with pytest.raises(FileNotFoundError):
+        call(dataset)

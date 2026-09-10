@@ -740,6 +740,9 @@ class Dataset:
                 (dict-like), and label_included is an int (0 or 1).
         """
         is_plus = SYNERGY_SET == SYNERGY_PLUS
+        # Read labels.csv up front. A dataset that is not on disk raises
+        # FileNotFoundError here rather than yield nothing.
+        labels = self.labels
         p_zipped_works = str(Path(self._path, "works_*.zip"))
 
         for f_work in glob.glob(p_zipped_works):
@@ -749,7 +752,7 @@ class Dataset:
                         works = json.loads(f.read())
 
                         for w in works:
-                            label_info = self.labels[w["id"].lower()]
+                            label_info = labels[w["id"].lower()]
                             label_included = label_info["label_included"]
 
                             work = Work(w)
@@ -799,13 +802,14 @@ class Dataset:
             active_vars = list(vars)
 
         extractors = {v: WORK_EXTRACTORS[v] for v in active_vars}
-        # For old synergy, pre-seed all label keys in CSV order so the
-        # returned dict is complete and ordered even if zip files are sparse.
         is_plus = SYNERGY_SET == SYNERGY_PLUS
-        records = {} if is_plus else {k: None for k in self.labels}
+        # Read labels.csv up front. A dataset that is not on disk raises
+        # FileNotFoundError here rather than yield nothing.
+        labels = self.labels
+        records = {} if is_plus else {k: None for k in labels}
         for work, _ in self.iter():
             work_id = work["id"].lower()
-            label_info = self.labels[work_id]
+            label_info = labels[work_id]
             record = {
                 "doi": label_info["doi"],
                 "lens_id": label_info["lens_id"],
